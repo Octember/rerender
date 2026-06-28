@@ -13,7 +13,7 @@ import { PNG } from 'pngjs';
 import pixelmatch from 'pixelmatch';
 
 // node-safe id list (importing the registry would pull in `remotion`, unresolved here).
-const EXAMPLES = ['01-title', '02-sequence-spring', '03-video', '04-transitions', '05-audio-viz'];
+const EXAMPLES = ['01-title', '02-sequence-spring', '03-video', '04-transitions', '05-audio-viz', '06-edge-cases'];
 const FRAME = 45;
 const W = 1080;
 const H = 1920;

@@ -7,6 +7,7 @@ import { Cards } from './02-sequence-spring/composition';
 import { VideoCard } from './03-video/composition';
 import { Transitions } from './04-transitions/composition';
 import { AudioViz } from './05-audio-viz/composition';
+import { EdgeCases } from './06-edge-cases/composition';
 
 export interface ExampleEntry {
   id: string;
@@ -23,6 +24,7 @@ export const examples: ExampleEntry[] = [
   { id: '03-video', component: VideoCard, width: 1080, height: 1920, fps: 30, durationInFrames: 90 },
   { id: '04-transitions', component: Transitions, width: 1080, height: 1920, fps: 30, durationInFrames: 90 },
   { id: '05-audio-viz', component: AudioViz, width: 1080, height: 1920, fps: 30, durationInFrames: 90 },
+  { id: '06-edge-cases', component: EdgeCases, width: 1080, height: 1920, fps: 30, durationInFrames: 90 },
 ];
 
 export const byId = (id: string): ExampleEntry | undefined => examples.find((e) => e.id === id);
