@@ -22,7 +22,19 @@ const OUTDIR = join(process.cwd(), 'compat', 'out');
 const sh = (cmd: string, args: string[]): void => {
   execFileSync(cmd, args, { stdio: 'ignore' });
 };
-const readPng = (path: string): PNG => PNG.sync.read(readFileSync(path));
+// Flatten onto black so transparent compositions compare on their (opaque) video basis.
+function readPng(path: string): PNG {
+  const png = PNG.sync.read(readFileSync(path));
+  const d = png.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const a = d[i + 3]! / 255;
+    d[i] = Math.round(d[i]! * a);
+    d[i + 1] = Math.round(d[i + 1]! * a);
+    d[i + 2] = Math.round(d[i + 2]! * a);
+    d[i + 3] = 255;
+  }
+  return png;
+}
 
 function main(): void {
   mkdirSync(OUTDIR, { recursive: true });

@@ -11,13 +11,27 @@ import { join } from 'node:path';
 import { PNG } from 'pngjs';
 import pixelmatch from 'pixelmatch';
 
-const ID = 'MyVideo';
+const ID = process.env.COMP ?? 'HelloWorld';
 const FRAME = Number(process.env.FRAME ?? 60);
 const W = 1920;
 const H = 1080;
 const OUTDIR = join(process.cwd(), 'compat', 'out');
 
-const readPng = (p: string): PNG => PNG.sync.read(readFileSync(p));
+// Flatten onto black: remover screenshots opaque (black page bg) while Remotion's
+// PNG still keeps transparency — both engines' VIDEO output is opaque black for a
+// transparent composition, so compare on that basis.
+function readPng(p: string): PNG {
+  const png = PNG.sync.read(readFileSync(p));
+  const d = png.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const a = d[i + 3]! / 255;
+    d[i] = Math.round(d[i]! * a);
+    d[i + 1] = Math.round(d[i + 1]! * a);
+    d[i + 2] = Math.round(d[i + 2]! * a);
+    d[i + 3] = 255;
+  }
+  return png;
+}
 
 function main(): void {
   mkdirSync(OUTDIR, { recursive: true });

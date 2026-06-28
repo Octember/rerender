@@ -27,7 +27,18 @@ const IS_EXAMPLE = /^\d/.test(ID);
 const REMOTION_ENTRY = IS_EXAMPLE ? 'remotion/index.ts' : 'template/src/index.ts';
 const REMOVER_PAGE = IS_EXAMPLE ? 'render/' : 'render/studio.html';
 const OUTDIR = join(process.cwd(), 'compat', 'out');
-const readPng = (p: string): PNG => PNG.sync.read(readFileSync(p));
+function readPng(p: string): PNG {
+  const png = PNG.sync.read(readFileSync(p));
+  const d = png.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const a = d[i + 3]! / 255;
+    d[i] = Math.round(d[i]! * a);
+    d[i + 1] = Math.round(d[i + 1]! * a);
+    d[i + 2] = Math.round(d[i + 2]! * a);
+    d[i + 3] = 255;
+  }
+  return png;
+}
 
 interface Box { x: number; y: number; w: number; h: number; cx: number; cy: number; count: number }
 function bbox(png: PNG, pred: (r: number, g: number, b: number) => boolean): Box | null {
