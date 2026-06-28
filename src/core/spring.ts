@@ -1,8 +1,63 @@
-// spring() — Remotion-compatible. A damped-harmonic curve from `from` to `to`.
+// spring() — a faithful port of Remotion's spring (dist/cjs/spring/spring-utils.js).
+// It is NOT a closed-form: Remotion integrates frame-by-frame, using the underdamped
+// solution for ζ<1 and the critically-damped solution for ζ≥1 (yes, even when
+// overdamped). A single analytic eval diverges from this for non-default configs
+// (e.g. damping:100 mass:0.5), so we replicate the stepping exactly.
 export interface SpringConfig {
   damping?: number;
   mass?: number;
   stiffness?: number;
+  overshootClamping?: boolean;
+}
+
+const DEFAULT = { damping: 10, mass: 1, stiffness: 100, overshootClamping: false };
+
+interface State {
+  lastTimestamp: number;
+  current: number;
+  toValue: number;
+  velocity: number;
+}
+
+function advance(a: State, now: number, c: number, m: number, k: number): State {
+  const deltaTime = Math.min(now - a.lastTimestamp, 64);
+  const v0 = -a.velocity;
+  const x0 = a.toValue - a.current;
+  const zeta = c / (2 * Math.sqrt(k * m));
+  const omega0 = Math.sqrt(k / m);
+  const omega1 = omega0 * Math.sqrt(1 - zeta ** 2);
+  const t = deltaTime / 1000;
+  const sin1 = Math.sin(omega1 * t);
+  const cos1 = Math.cos(omega1 * t);
+
+  const underEnv = Math.exp(-zeta * omega0 * t);
+  const underFrag = underEnv * (sin1 * ((v0 + zeta * omega0 * x0) / omega1) + x0 * cos1);
+  const underPos = a.toValue - underFrag;
+  const underVel = zeta * omega0 * underFrag - underEnv * (cos1 * (v0 + zeta * omega0 * x0) - omega1 * x0 * sin1);
+
+  const critEnv = Math.exp(-omega0 * t);
+  const critPos = a.toValue - critEnv * (x0 + (v0 + omega0 * x0) * t);
+  const critVel = critEnv * (v0 * (t * omega0 - 1) + t * x0 * omega0 * omega0);
+
+  return {
+    toValue: a.toValue,
+    lastTimestamp: now,
+    current: zeta < 1 ? underPos : critPos,
+    velocity: zeta < 1 ? underVel : critVel,
+  };
+}
+
+/** The raw 0→1 spring value at `frame`, integrated step-by-step like Remotion. */
+export function springCalculation(frame: number, fps: number, config: SpringConfig = {}): number {
+  const { damping: c, mass: m, stiffness: k } = { ...DEFAULT, ...config };
+  let a: State = { lastTimestamp: 0, current: 0, toValue: 1, velocity: 0 };
+  const frameClamped = Math.max(0, frame);
+  const unevenRest = frameClamped % 1;
+  for (let f = 0; f <= Math.floor(frameClamped); f++) {
+    if (f === Math.floor(frameClamped)) f += unevenRest;
+    a = advance(a, (f / fps) * 1000, c, m, k);
+  }
+  return a.current;
 }
 
 export function spring({
@@ -18,16 +73,8 @@ export function spring({
   from?: number;
   to?: number;
 }): number {
-  const { damping = 10, mass = 1, stiffness = 100 } = config;
-  const t = Math.max(0, frame) / fps;
-  const w0 = Math.sqrt(stiffness / mass);
-  const zeta = damping / (2 * Math.sqrt(stiffness * mass));
-  let progress: number;
-  if (zeta < 1) {
-    const wd = w0 * Math.sqrt(1 - zeta * zeta);
-    progress = 1 - Math.exp(-zeta * w0 * t) * (Math.cos(wd * t) + ((zeta * w0) / wd) * Math.sin(wd * t));
-  } else {
-    progress = 1 - Math.exp(-w0 * t) * (1 + w0 * t);
-  }
-  return from + (to - from) * progress;
+  const { overshootClamping } = { ...DEFAULT, ...config };
+  const current = springCalculation(frame, fps, config);
+  const inner = overshootClamping ? (to >= from ? Math.min(current, to) : Math.max(current, to)) : current;
+  return from === 0 && to === 1 ? inner : from + (to - from) * inner;
 }
