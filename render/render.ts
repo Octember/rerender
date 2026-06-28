@@ -17,6 +17,7 @@ const config = { w: 1080, h: 1920, fps: 30, dur: 90 };
 const SLICES = Math.max(1, Number(process.argv[2] ?? 1));
 const COMP = process.argv[3] ?? ''; // example id (render page picks from the registry)
 const OUT = process.argv[4] ?? 'out.mp4';
+const EXACT = process.env.EXACT === '1'; // frame-step screenshots (deterministic) vs real-time recording
 
 interface Slice {
   from: number;
@@ -64,6 +65,36 @@ function trimToFrames(s: Slice, dir: string): string {
   return out;
 }
 
+/** EXACT path: drive the page to each frame and screenshot it — recorded-frame N ==
+ *  composition-frame N by construction (how Remotion renders). Still sliced: each
+ *  browser owns a frame range and writes globally-numbered PNGs into a shared dir. */
+async function captureExact(lo: number, hi: number, dir: string): Promise<void> {
+  const browser = await chromium.launch({ args: ['--force-color-profile=srgb', '--disable-gpu'] });
+  const context = await browser.newContext({ viewport: { width: config.w, height: config.h }, deviceScaleFactor: 1 });
+  const page = await context.newPage();
+  await page.goto(`${BASE}/render/?w=${config.w}&h=${config.h}&fps=${config.fps}&dur=${config.dur}&step=1&comp=${COMP}`, { waitUntil: 'load' });
+  await page.waitForFunction(() => window.__ready === true, undefined, { timeout: 60_000 });
+  for (let f = lo; f < hi; f++) {
+    await page.evaluate((fr) => window.__setFrame!(fr), f);
+    await page.screenshot({ path: join(dir, `f-${String(f).padStart(5, '0')}.png`), clip: { x: 0, y: 0, width: config.w, height: config.h } });
+  }
+  await context.close();
+  await browser.close();
+  console.log(`  exact slice ${lo}–${hi} captured`);
+}
+
+async function renderExact(): Promise<void> {
+  const dir = mkdtempSync(join(tmpdir(), 'remover-exact-'));
+  const per = Math.ceil(config.dur / SLICES);
+  const ranges = Array.from({ length: SLICES }, (_, i) => [i * per, Math.min((i + 1) * per, config.dur)] as const).filter(([a, b]) => a < b);
+  console.log(`rendering ${config.dur} frames EXACT (frame-step) in ${ranges.length} parallel slice(s)…`);
+  const t0 = Date.now();
+  await Promise.all(ranges.map(([a, b]) => captureExact(a, b, dir)));
+  console.log(`captured in ${((Date.now() - t0) / 1000).toFixed(1)}s wall-clock`);
+  ff(['-framerate', String(config.fps), '-i', join(dir, 'f-%05d.png'), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '18', '-r', String(config.fps), '-movflags', '+faststart', OUT]);
+  console.log(`wrote ${OUT}`);
+}
+
 async function main(): Promise<void> {
   const dir = mkdtempSync(join(tmpdir(), 'remover-render-'));
   const per = Math.ceil(config.dur / SLICES);
@@ -82,7 +113,7 @@ async function main(): Promise<void> {
   console.log(`wrote ${OUT}`);
 }
 
-main().catch((e) => {
+(EXACT ? renderExact() : main()).catch((e) => {
   console.error('render failed:', e);
   process.exit(1);
 });
