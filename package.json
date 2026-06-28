@@ -1,0 +1,9 @@
+{
+  "name": "remover",
+  "version": "0.0.0",
+  "description": "Drop-in, MIT Remotion whose renderer is a parallel recording of the preview — slice the timeline across N browsers, record, stitch.",
+  "license": "MIT",
+  "author": "Noah Lindner",
+  "type": "module",
+  "private": true
+}
