@@ -15,6 +15,8 @@ import { join } from 'node:path';
 const BASE = process.env.RENDER_URL ?? 'http://127.0.0.1:5175';
 const config = { w: 1080, h: 1920, fps: 30, dur: 90 };
 const SLICES = Math.max(1, Number(process.argv[2] ?? 1));
+const COMP = process.argv[3] ?? ''; // example id (render page picks from the registry)
+const OUT = process.argv[4] ?? 'out.mp4';
 
 interface Slice {
   from: number;
@@ -30,7 +32,7 @@ async function recordSlice(from: number, to: number, dir: string, idx: number): 
     recordVideo: { dir, size: { width: config.w, height: config.h } },
   });
   const page = await context.newPage();
-  const url = `${BASE}/render/?w=${config.w}&h=${config.h}&fps=${config.fps}&dur=${config.dur}&from=${from}&to=${to}`;
+  const url = `${BASE}/render/?w=${config.w}&h=${config.h}&fps=${config.fps}&dur=${config.dur}&from=${from}&to=${to}&comp=${COMP}`;
   await page.goto(url, { waitUntil: 'load' });
   await page.waitForFunction(() => window.__renderDone === true, undefined, { timeout: 120_000 });
   const video = page.video();
@@ -76,8 +78,8 @@ async function main(): Promise<void> {
 
   const list = join(dir, 'list.txt');
   writeFileSync(list, trimmed.map((m) => `file '${m}'`).join('\n'));
-  ff(['-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', '-movflags', '+faststart', 'out.mp4']);
-  console.log('wrote out.mp4');
+  ff(['-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', '-movflags', '+faststart', OUT]);
+  console.log(`wrote ${OUT}`);
 }
 
 main().catch((e) => {

@@ -6,3 +6,5 @@ dist/
 out/
 *.mp4
 !public/demo-clip.mp4
+
+compat/out/

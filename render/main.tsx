@@ -1,18 +1,18 @@
-// Render page: the composition ONLY (no Player chrome), at native resolution,
-// played from `from`→`to` in real time. Playwright records this page; setting
-// window.__renderDone signals the segment is finished. Query params drive the
-// frame range so a slice can render just its part.
+// Render page: renders ONE example (chosen by ?comp=) at native resolution, played
+// from `from`→`to` in real time. Playwright records this; window.__renderDone
+// signals the slice is finished.
 import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ConfigContext, FrameContext, PlayingContext } from '../src/core/frame';
-import { Demo } from '../demo/composition';
+import { byId, examples } from '../examples/registry';
 
 const p = new URLSearchParams(location.search);
+const entry = byId(p.get('comp') ?? '') ?? examples[examples.length - 1]!;
 const config = {
-  width: Number(p.get('w')) || 1080,
-  height: Number(p.get('h')) || 1920,
-  fps: Number(p.get('fps')) || 30,
-  durationInFrames: Number(p.get('dur')) || 90,
+  width: Number(p.get('w')) || entry.width,
+  height: Number(p.get('h')) || entry.height,
+  fps: Number(p.get('fps')) || entry.fps,
+  durationInFrames: Number(p.get('dur')) || entry.durationInFrames,
 };
 const from = Number(p.get('from')) || 0;
 const to = Number(p.get('to')) || config.durationInFrames;
@@ -22,6 +22,8 @@ declare global {
     __renderDone?: boolean;
   }
 }
+
+const Composition = entry.component;
 
 function RenderStage(): JSX.Element {
   const [frame, setFrame] = useState(from);
@@ -48,7 +50,7 @@ function RenderStage(): JSX.Element {
       <ConfigContext.Provider value={config}>
         <PlayingContext.Provider value={true}>
           <FrameContext.Provider value={frame}>
-            <Demo />
+            <Composition />
           </FrameContext.Provider>
         </PlayingContext.Provider>
       </ConfigContext.Provider>
