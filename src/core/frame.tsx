@@ -1,7 +1,7 @@
 // The frame clock + composition config, as React context — Remotion-compatible.
 // Because compositions render to real DOM, useCurrentFrame() just drives a normal
 // React re-render and the browser paints. That's the whole renderer.
-import { createContext, useContext, type ReactNode } from 'react';
+import { Children, createContext, isValidElement, useContext, type ReactNode } from 'react';
 import { AbsoluteFill } from './primitives';
 
 export interface VideoConfig {
@@ -44,3 +44,29 @@ export function Sequence({
     layout === 'absolute-fill' ? <AbsoluteFill>{children}</AbsoluteFill> : children;
   return <FrameContext.Provider value={local}>{content}</FrameContext.Provider>;
 }
+
+interface SeriesSequenceProps {
+  durationInFrames: number;
+  offset?: number;
+  layout?: 'absolute-fill' | 'none';
+  children: ReactNode;
+}
+
+/** <Series> plays its <Series.Sequence> children back-to-back (each auto-offset by
+ *  the sum of the previous durations). Remotion-compatible. */
+export function Series({ children }: { children: ReactNode }): ReactNode {
+  let offset = 0;
+  return Children.toArray(children).map((child, i) => {
+    if (!isValidElement<SeriesSequenceProps>(child)) return null;
+    const { durationInFrames, offset: childOffset = 0, layout, children: seqChildren } = child.props;
+    const from = offset + childOffset;
+    offset = from + durationInFrames;
+    return (
+      <Sequence key={i} from={from} durationInFrames={durationInFrames} layout={layout}>
+        {seqChildren}
+      </Sequence>
+    );
+  });
+}
+Series.Sequence = (_props: SeriesSequenceProps): null => null; // marker; <Series> reads its props
+

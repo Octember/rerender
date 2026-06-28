@@ -15,5 +15,5 @@
     },
     "noEmit": true
   },
-  "include": ["src", "demo"]
+  "include": ["src", "demo", "render", "compat"]
 }

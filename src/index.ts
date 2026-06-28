@@ -4,6 +4,7 @@ export {
   useVideoConfig,
   useIsPlaying,
   Sequence,
+  Series,
   FrameContext,
   ConfigContext,
   PlayingContext,
