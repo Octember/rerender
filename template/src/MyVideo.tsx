@@ -40,6 +40,7 @@ export function MyVideo({ titleText, titleColor }: MyVideoProps): JSX.Element {
   return (
     <AbsoluteFill style={{ background: 'linear-gradient(135deg, #0b1020, #1a2340)', justifyContent: 'center', alignItems: 'center' }}>
       <div
+        className="ring"
         style={{
           position: 'absolute',
           width: 540,
