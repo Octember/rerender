@@ -9,6 +9,10 @@
     "noUncheckedIndexedAccess": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
+    "baseUrl": ".",
+    "paths": {
+      "remotion": ["./src/remotion.ts"]
+    },
     "noEmit": true
   },
   "include": ["src", "demo"]

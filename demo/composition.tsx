@@ -1,26 +1,28 @@
-// A composition in the Remotion API — but it's real DOM, so arbitrary CSS
-// (backdrop-filter, etc.) just works. This same DOM is what the recorder records.
-import { AbsoluteFill, Video, useCurrentFrame, useVideoConfig, interpolate, Easing } from '../src';
+// A composition written exactly like a Remotion one — `from 'remotion'`, arbitrary
+// CSS — but it runs on remover (the import is aliased). This is the drop-in proof.
+import { AbsoluteFill, Video, useCurrentFrame, useVideoConfig, interpolate, spring, staticFile } from 'remotion';
 
 export function Demo(): JSX.Element {
   const frame = useCurrentFrame();
-  const { durationInFrames } = useVideoConfig();
+  const { fps, durationInFrames } = useVideoConfig();
   const end = durationInFrames - 1;
 
   const scale = interpolate(frame, [0, end], [1, 1.12]); // Ken Burns
-  const capY = interpolate(frame, [0, 14], [40, 0], { extrapolateRight: 'clamp', easing: Easing.cubicOut });
-  const opacity = interpolate(frame, [0, 14], [0, 1], { extrapolateRight: 'clamp' });
+  const pop = spring({ frame, fps, config: { damping: 12 } }); // spring pop-in
+  const capY = interpolate(pop, [0, 1], [44, 0]);
+  const capScale = interpolate(pop, [0, 1], [0.9, 1]);
+  const opacity = interpolate(frame, [0, 12], [0, 1], { extrapolateRight: 'clamp' });
 
   return (
     <AbsoluteFill style={{ background: '#000' }}>
       <AbsoluteFill style={{ transform: `scale(${scale})` }}>
-        <Video src="/demo-clip.mp4" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        <Video src={staticFile('demo-clip.mp4')} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
       </AbsoluteFill>
 
       <AbsoluteFill style={{ justifyContent: 'flex-end', alignItems: 'center', paddingBottom: 180 }}>
         <div
           style={{
-            transform: `translateY(${capY}px)`,
+            transform: `translateY(${capY}px) scale(${capScale})`,
             opacity,
             padding: '18px 34px',
             borderRadius: 22,
