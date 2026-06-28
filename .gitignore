@@ -5,3 +5,4 @@ dist/
 .vite/
 out/
 *.mp4
+!public/demo-clip.mp4
