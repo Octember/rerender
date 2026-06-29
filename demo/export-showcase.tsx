@@ -1,8 +1,9 @@
 // The in-browser export showcase. A composition plays live in the <Player>; one click
-// frame-steps it, captures each frame from the real DOM, and encodes an mp4 — entirely in
-// this tab (WebCodecs + mediabunny, no server, no ffmpeg). The exported file is then shown
-// side-by-side with the live preview: same frame counter ticking in both, one a React tree,
-// one a decoded .mp4. Network requests during the export are measured live — and it's 0.
+// frame-steps it, captures each frame from the real DOM (foreignObject) + decodes the footage
+// with mediabunny, and encodes an mp4 — entirely in this tab (WebCodecs, no server, no ffmpeg).
+// The exported file is shown side-by-side with the live preview: the same frame-counter HUD
+// ticks in both, one a React tree and one a decoded .mp4. A live filmstrip, a CSS reveal of how
+// the visuals are built, and a caniuse-style support matrix round it out.
 import { type ComponentType, type CSSProperties, useEffect, useRef, useState } from 'react';
 import { Player, type PlayerRef } from '../src';
 import { exportToMp4 } from '../src/client/export';
@@ -49,18 +50,174 @@ function Badge({ icon, children }: { icon: string; children: React.ReactNode }):
   );
 }
 
+// ── CSS reveal: the actual Orb component, so it's obvious the visuals are real DOM/CSS ──
+function CssReveal(): JSX.Element {
+  const k: CSSProperties = { color: '#c678dd' }; // keyword
+  const f: CSSProperties = { color: '#61afef' }; // function/name
+  const s: CSSProperties = { color: '#98c379' }; // string/value
+  const d: CSSProperties = { color: '#5c6370' }; // dim
+  return (
+    <div style={{ marginTop: 30 }}>
+      <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>Those glowing circles? Each is one styled &lt;div&gt;.</div>
+      <div style={{ color: '#8a8a99', fontSize: 14, marginBottom: 14, maxWidth: 720 }}>
+        No canvas drawing, no shader — just CSS the renderer rasterizes straight into the mp4. This is the exact code behind them:
+      </div>
+      <pre
+        style={{
+          ...card,
+          margin: 0,
+          padding: '16px 18px',
+          fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
+          fontSize: 13,
+          lineHeight: 1.65,
+          color: '#abb2bf',
+          overflowX: 'auto',
+        }}
+      >
+        <span style={k}>function</span> <span style={f}>Orb</span>(<span style={{ color: '#e06c75' }}>{'{ hue, size }'}</span>) {'{'}
+        {'\n'} <span style={k}>return</span> ({'\n'} <span style={d}>&lt;</span>
+        <span style={f}>div</span> <span style={{ color: '#d19a66' }}>style</span>={'{{'}
+        {'\n'} <span style={{ color: '#d19a66' }}>width</span>: size, <span style={{ color: '#d19a66' }}>height</span>: size,{' '}
+        <span style={{ color: '#d19a66' }}>borderRadius</span>: <span style={s}>'50%'</span>,{'\n'}{' '}
+        <span style={{ background: 'rgba(255,94,138,0.14)', borderRadius: 4, padding: '1px 3px' }}>
+          <span style={{ color: '#d19a66' }}>background</span>: <span style={s}>{'`radial-gradient(circle at 35% 30%,'}</span>
+          {'\n'} <span style={s}>{'  hsla(${hue}, 92%, 68%, .85),'}</span>
+          {'\n'} <span style={s}>{'  hsla(${hue}, 92%, 55%, 0) 70%)`'}</span>
+        </span>
+        ,{'\n'} {'}}'} <span style={d}>/&gt;</span>
+        {'\n'} );
+        {'\n'}
+        {'}'}
+      </pre>
+    </div>
+  );
+}
+
+// ── caniuse-style support matrix ──
+type Cell = ['ok' | 'partial' | 'no', string];
+const COMPAT: { feat: string; cells: Cell[] }[] = [
+  {
+    feat: 'WebCodecs · VideoEncoder (mp4)',
+    cells: [
+      ['ok', '94'],
+      ['ok', '94'],
+      ['ok', '16.4'],
+      ['partial', '130'],
+    ],
+  },
+  {
+    feat: 'WebCodecs · VideoDecoder (footage)',
+    cells: [
+      ['ok', '94'],
+      ['ok', '94'],
+      ['ok', '16.4'],
+      ['ok', '130'],
+    ],
+  },
+  {
+    feat: 'foreignObject → <canvas>',
+    cells: [
+      ['ok', '✓'],
+      ['ok', '✓'],
+      ['partial', '*'],
+      ['ok', '✓'],
+    ],
+  },
+  {
+    feat: 'This demo, end to end',
+    cells: [
+      ['ok', ''],
+      ['ok', ''],
+      ['partial', ''],
+      ['partial', ''],
+    ],
+  },
+];
+const BROWSERS = ['Chrome', 'Edge', 'Safari', 'Firefox'];
+const CELL_BG: Record<Cell[0], string> = { ok: '#15301f', partial: '#332a12', no: '#331717' };
+const CELL_FG: Record<Cell[0], string> = { ok: '#7fdca0', partial: '#e8c06b', no: '#ff8080' };
+const CELL_MARK: Record<Cell[0], string> = { ok: '✓', partial: '~', no: '✕' };
+
+function CompatMatrix(): JSX.Element {
+  return (
+    <div style={{ marginTop: 30 }}>
+      <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>Where it runs</div>
+      <div style={{ color: '#8a8a99', fontSize: 14, marginBottom: 14, maxWidth: 720 }}>
+        It's all standard web platform — WebCodecs + canvas. <span style={{ color: '#e8c06b' }}>~</span> = works with caveats (Firefox's
+        encoder is newer; Safari's foreignObject→canvas has quirks).
+      </div>
+      <div style={{ ...card, overflowX: 'auto' }}>
+        <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13, minWidth: 520 }}>
+          <thead>
+            <tr>
+              <th style={{ textAlign: 'left', padding: '12px 16px', color: '#8a8a99', fontWeight: 600, borderBottom: '1px solid #1d1d25' }}>
+                Feature
+              </th>
+              {BROWSERS.map((b) => (
+                <th
+                  key={b}
+                  style={{ padding: '12px 8px', color: '#cfcfd8', fontWeight: 600, borderBottom: '1px solid #1d1d25', width: 92 }}
+                >
+                  {b}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {COMPAT.map((row) => (
+              <tr key={row.feat}>
+                <td
+                  style={{
+                    padding: '10px 16px',
+                    color: '#cfcfd8',
+                    fontFamily: 'ui-monospace, monospace',
+                    fontSize: 12.5,
+                    borderBottom: '1px solid #16161d',
+                  }}
+                >
+                  {row.feat}
+                </td>
+                {row.cells.map((c, i) => (
+                  <td key={BROWSERS[i]} style={{ padding: '6px 8px', textAlign: 'center', borderBottom: '1px solid #16161d' }}>
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: 1,
+                        background: CELL_BG[c[0]],
+                        color: CELL_FG[c[0]],
+                        borderRadius: 7,
+                        padding: '6px 0',
+                        width: 60,
+                        fontWeight: 700,
+                      }}
+                    >
+                      <span style={{ fontSize: 14 }}>{CELL_MARK[c[0]]}</span>
+                      {c[1] && <span style={{ fontSize: 10, opacity: 0.85, fontWeight: 500 }}>{c[1]}</span>}
+                    </span>
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export function ExportShowcase(): JSX.Element {
   const [status, setStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
   const [pct, setPct] = useState(0);
   const [frameNo, setFrameNo] = useState(0);
   const [strip, setStrip] = useState<string[]>([]);
   const [url, setUrl] = useState<string | null>(null);
-  const [meta, setMeta] = useState<{ secs: string; size: string; reqs: number } | null>(null);
+  const [meta, setMeta] = useState<{ secs: string; size: string } | null>(null);
   const [err, setErr] = useState('');
   const liveCanvas = useRef<HTMLCanvasElement>(null);
   const player = useRef<PlayerRef>(null);
 
-  // autoplay the live preview (drives it through the imperative PlayerRef) + revoke old URLs
   useEffect(() => {
     player.current?.play();
   }, []);
@@ -79,7 +236,6 @@ export function ExportShowcase(): JSX.Element {
     setUrl(null);
     setErr('');
     const thumbs: string[] = [];
-    const reqBefore = performance.getEntriesByType('resource').length;
     const t0 = performance.now();
     try {
       const blob = await exportToMp4({
@@ -103,9 +259,8 @@ export function ExportShowcase(): JSX.Element {
           }
         },
       });
-      const reqs = performance.getEntriesByType('resource').length - reqBefore;
       setUrl(URL.createObjectURL(blob));
-      setMeta({ secs: ((performance.now() - t0) / 1000).toFixed(1), size: (blob.size / 1024).toFixed(0), reqs });
+      setMeta({ secs: ((performance.now() - t0) / 1000).toFixed(1), size: (blob.size / 1024).toFixed(0) });
       setStatus('done');
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
@@ -199,8 +354,8 @@ export function ExportShowcase(): JSX.Element {
         </div>
       </div>
 
-      {/* export button + live stats */}
-      <div style={{ marginTop: 22, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+      {/* export CTA + the headline render-time stat + big download */}
+      <div style={{ marginTop: 22, display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
         <button
           type="button"
           onClick={run}
@@ -219,24 +374,58 @@ export function ExportShowcase(): JSX.Element {
         >
           {status === 'running' ? `Exporting… ${pct}%` : status === 'done' ? '↻ Export again' : '⬇ Export this to MP4 — in your browser'}
         </button>
+
         {status === 'done' && meta && (
-          <>
-            <Badge icon="⏱">{meta.secs}s</Badge>
-            <Badge icon="🎞">{DUR} frames</Badge>
-            <Badge icon="🛜">{meta.reqs} network requests</Badge>
-            <Badge icon="✈️">100% offline</Badge>
-            {url && (
-              <a href={url} download="remover-export.mp4" style={{ color: '#ff9ab8', fontSize: 14, fontWeight: 600 }}>
-                download .mp4 ↗
-              </a>
-            )}
-          </>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+            <span style={{ color: '#8a8a99', fontSize: 14 }}>rendered in</span>
+            <span
+              style={{
+                fontSize: 40,
+                fontWeight: 850,
+                lineHeight: 1,
+                background: 'linear-gradient(90deg,#ff5e8a,#ffa14a)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                letterSpacing: -1,
+              }}
+            >
+              {meta.secs}s
+            </span>
+          </div>
         )}
       </div>
 
+      {status === 'done' && meta && url && (
+        <div style={{ marginTop: 18, display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+          <a
+            href={url}
+            download="remover-export.mp4"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 10,
+              background: '#16161d',
+              color: '#fff',
+              border: `1.5px solid ${ACCENT}`,
+              borderRadius: 12,
+              padding: '14px 26px',
+              fontSize: 16,
+              fontWeight: 700,
+            }}
+          >
+            <span style={{ fontSize: 18 }}>⬇</span> Download the .mp4
+          </a>
+          <Badge icon="🎞">
+            {DUR} frames · {W}×{H}
+          </Badge>
+          <Badge icon="🖥">no server</Badge>
+          <Badge icon="🚫">no ffmpeg</Badge>
+        </div>
+      )}
+
       {/* filmstrip of captured frames */}
       {strip.length > 0 && (
-        <div style={{ marginTop: 22 }}>
+        <div style={{ marginTop: 24 }}>
           <div style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11, color: '#6a6a76', letterSpacing: 1, marginBottom: 8 }}>
             FRAMES CAPTURED FROM THE LIVE DOM →
           </div>
@@ -256,6 +445,9 @@ export function ExportShowcase(): JSX.Element {
         </div>
       )}
 
+      <CssReveal />
+      <CompatMatrix />
+
       {/* the contrast */}
       <div style={{ marginTop: 30, display: 'flex', gap: 14, flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: 280, ...card, padding: 18 }}>
@@ -267,7 +459,7 @@ export function ExportShowcase(): JSX.Element {
         <div style={{ flex: 1, minWidth: 280, background: '#1a1320', border: `1px solid ${ACCENT}`, borderRadius: 14, padding: 18 }}>
           <div style={{ fontSize: 13, color: ACCENT, marginBottom: 6 }}>remover just did it:</div>
           <div style={{ fontSize: 15, color: '#fff', lineHeight: 1.5 }}>
-            ↑ all of that — in the browser tab you're reading this in. No server. No ffmpeg.
+            ↑ all of that — real footage and all — in the browser tab you're reading this in.
           </div>
         </div>
       </div>

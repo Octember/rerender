@@ -9,7 +9,18 @@
 import { type ComponentType, type ReactElement, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
-import { BufferTarget, CanvasSource, Mp4OutputFormat, Output, QUALITY_HIGH } from 'mediabunny';
+import {
+  ALL_FORMATS,
+  BufferTarget,
+  CanvasSource,
+  Input,
+  Mp4OutputFormat,
+  Output,
+  QUALITY_HIGH,
+  UrlSource,
+  type VideoSample,
+  VideoSampleSink,
+} from 'mediabunny';
 import { CompositionFrame, type VideoConfig } from '../core/frame';
 import type { VideoCodec } from '../renderer/types';
 
@@ -61,32 +72,51 @@ function drawVideo(ctx: CanvasRenderingContext2D, v: HTMLVideoElement, dx: numbe
   ctx.drawImage(v, (vw - sw) / 2, (vh - sh) / 2, sw, sh, dx, dy, dw, dh);
 }
 
-const once = (el: EventTarget, event: string): Promise<void> =>
-  new Promise((res) => el.addEventListener(event, () => res(), { once: true }));
+/** Draw a decoded mediabunny VideoSample into a destination box with object-fit semantics —
+ *  the deterministic path. We decode the clip ourselves (WebCodecs via mediabunny) at the
+ *  exact source time the <video> is seeked to, so a frame is always present, regardless of
+ *  whether the element managed to paint it (offscreen/throttled tabs otherwise capture black). */
+function drawSample(ctx: CanvasRenderingContext2D, s: VideoSample, dx: number, dy: number, dw: number, dh: number, fit: string): void {
+  const vw = s.displayWidth;
+  const vh = s.displayHeight;
+  if (!vw || !vh) return;
+  const boxRatio = dw / dh;
+  const vidRatio = vw / vh;
+  if (fit === 'contain') {
+    let tw = dw;
+    let th = dh;
+    if (vidRatio > boxRatio) th = dw / vidRatio;
+    else tw = dh * vidRatio;
+    s.draw(ctx, 0, 0, vw, vh, dx + (dw - tw) / 2, dy + (dh - th) / 2, tw, th);
+    return;
+  }
+  let sw = vw;
+  let sh = vh;
+  if (vidRatio > boxRatio) sw = vh * boxRatio;
+  else sh = vw / boxRatio;
+  s.draw(ctx, (vw - sw) / 2, (vh - sh) / 2, sw, sh, dx, dy, dw, dh);
+}
 
-/** Wait for every <video> to have a decodable frame at the current position — the
- *  client-side equivalent of the headless settle()'s video wait. Check `seeking` FIRST: a
- *  seek transiently drops readyState below 2, and `loadeddata` only fires once (initial
- *  load), so waiting on it mid-seek would hang — `seeked` is the event that fires. (A rAF
- *  would also hang: a non-foregrounded tab throttles it to ~0; drawImage reads the decoded
- *  frame directly, so no rAF is needed.) */
-async function settleVideos(stage: HTMLElement): Promise<void> {
-  await Promise.all(
-    Array.from(stage.querySelectorAll('video')).map(async (v) => {
-      if (v.seeking) await once(v, 'seeked');
-      else if (v.readyState < 2) await once(v, 'loadeddata');
-      // `seeked` fires when currentTime updates, but the frame for that time may not be
-      // decoded/presentable yet — drawImage would then capture black. Wait one
-      // requestVideoFrameCallback (a presented frame), time-bounded so a throttled tab can't hang.
-      const rvfc = (v as HTMLVideoElement & { requestVideoFrameCallback?: (cb: () => void) => number }).requestVideoFrameCallback;
-      if (rvfc) {
-        await new Promise<void>((res) => {
-          rvfc.call(v, () => res());
-          setTimeout(res, 60);
-        });
-      }
-    }),
+/** Open a mediabunny decoder (VideoSampleSink) for each distinct <video> source in the stage,
+ *  so paintFrame can pull the exact source frame deterministically. Falls back to the element
+ *  for any source that can't be opened (e.g. CORS). */
+async function openVideoSinks(stage: HTMLElement): Promise<Map<string, VideoSampleSink>> {
+  const sinks = new Map<string, VideoSampleSink>();
+  const srcs = new Set(
+    Array.from(stage.querySelectorAll('video'))
+      .map((v) => v.src)
+      .filter(Boolean),
   );
+  for (const src of srcs) {
+    try {
+      const input = new Input({ formats: ALL_FORMATS, source: new UrlSource(src) });
+      const track = await input.getPrimaryVideoTrack();
+      if (track) sinks.set(src, new VideoSampleSink(track));
+    } catch {
+      /* fall back to the <video> element for this source */
+    }
+  }
+  return sinks;
 }
 
 /** Capture one frame: composite each <video> natively (its laid-out box, with object-fit
@@ -94,7 +124,13 @@ async function settleVideos(stage: HTMLElement): Promise<void> {
  *  are not), then draw the DOM overlay — everything except the videos — on top via an SVG
  *  foreignObject. Correct for the common structure of a video background (or mid-stack)
  *  with DOM overlays above it. */
-async function paintFrame(stage: HTMLElement, ctx: CanvasRenderingContext2D, w: number, h: number): Promise<void> {
+async function paintFrame(
+  stage: HTMLElement,
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  sinks: Map<string, VideoSampleSink>,
+): Promise<void> {
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, w, h);
 
@@ -102,17 +138,22 @@ async function paintFrame(stage: HTMLElement, ctx: CanvasRenderingContext2D, w: 
   const sx = w / stageRect.width;
   const sy = h / stageRect.height;
   for (const v of Array.from(stage.querySelectorAll('video'))) {
-    if (!v.videoWidth) continue;
     const r = v.getBoundingClientRect();
-    drawVideo(
-      ctx,
-      v,
-      (r.left - stageRect.left) * sx,
-      (r.top - stageRect.top) * sy,
-      r.width * sx,
-      r.height * sy,
-      getComputedStyle(v).objectFit || 'fill',
-    );
+    const dx = (r.left - stageRect.left) * sx;
+    const dy = (r.top - stageRect.top) * sy;
+    const dw = r.width * sx;
+    const dh = r.height * sy;
+    const fit = getComputedStyle(v).objectFit || 'fill';
+    const sink = sinks.get(v.src);
+    if (sink) {
+      const sample = await sink.getSample(v.currentTime); // the source time remover seeked this <video> to
+      if (sample) {
+        drawSample(ctx, sample, dx, dy, dw, dh, fit);
+        sample.close();
+      }
+    } else if (v.videoWidth) {
+      drawVideo(ctx, v, dx, dy, dw, dh, fit);
+    }
   }
 
   const clone = stage.cloneNode(true) as HTMLElement;
@@ -159,13 +200,18 @@ export async function exportToMp4(opts: ClientExportOptions): Promise<Blob> {
   output.addVideoTrack(source, { frameRate: fps });
   await output.start();
 
+  // Open a deterministic decoder per <video> source up front (so footage frames are always
+  // present, even when the offscreen element wouldn't paint them).
+  const sinks = await openVideoSinks(stage);
+
   try {
     await document.fonts.ready;
     for (let f = 0; f < durationInFrames; f++) {
       if (signal?.aborted) throw new Error('export aborted');
+      // flushSync commits the render AND flushes remover's <Video> effect, which sets each
+      // element's currentTime synchronously — that's the source time we decode below.
       flushSync(() => setFrameRef.current(f));
-      await settleVideos(stage); // ensure <video>s are decodable + seeked to frame f
-      await paintFrame(stage, ctx, width, height);
+      await paintFrame(stage, ctx, width, height, sinks);
       onFrame?.(canvas, f);
       await source.add(f / fps, 1 / fps, f === 0 ? { keyFrame: true } : undefined);
       onProgress?.(f + 1, durationInFrames);
