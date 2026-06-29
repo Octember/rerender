@@ -101,6 +101,7 @@ export function App(): JSX.Element {
             height={selected.height}
             fps={selected.fps}
             durationInFrames={selected.durationInFrames}
+            initialFrame={Math.floor(selected.durationInFrames * 0.4)}
             displayHeight={Math.min(window.innerHeight - 120, ((window.innerWidth - 240 - 340 - 64) * selected.height) / selected.width)}
           />
         ) : (

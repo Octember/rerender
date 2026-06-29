@@ -12,6 +12,8 @@ export interface PlayerProps extends VideoConfig {
   /** props passed to the composition (merged over its defaultProps by the caller). */
   inputProps?: Record<string, unknown>;
   controls?: boolean;
+  /** Frame to show on mount — a poster frame, so the preview isn't blank at frame 0. */
+  initialFrame?: number;
   /** Display height in px; the composition is scaled to fit. */
   displayHeight?: number;
   style?: CSSProperties;
@@ -25,11 +27,12 @@ export function Player({
   fps,
   durationInFrames,
   controls = true,
+  initialFrame = 0,
   displayHeight = 600,
   style,
 }: PlayerProps): JSX.Element {
   const config: VideoConfig = { width, height, fps, durationInFrames };
-  const [frame, setFrame] = useState(0);
+  const [frame, setFrame] = useState(initialFrame);
   const [playing, setPlaying] = useState(false);
   const raf = useRef(0);
   const anchor = useRef({ t: 0, f: 0 });
