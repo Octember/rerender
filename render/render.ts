@@ -19,8 +19,9 @@ const SLICES = Math.max(1, Number(process.argv[2] ?? 1));
 const COMP = process.argv[3] ?? ''; // composition id (render page picks it from the registry)
 const OUT = process.argv[4] ?? 'out.mp4';
 const STUDIO = process.env.STUDIO === '1'; // render a registered-Root composition (real Remotion project)
+const TEMPLATE = process.env.TEMPLATE ?? 'helloworld'; // which templates/<name>/ project
 const PAGE = STUDIO ? '/render/studio.html' : '/render/';
-const stepUrl = (): string => `${BASE}${PAGE}?step=1&comp=${COMP}`;
+const stepUrl = (): string => `${BASE}${PAGE}?step=1&template=${TEMPLATE}&comp=${COMP}`;
 
 const ff = (args: string[]): void => {
   execFileSync('ffmpeg', ['-y', ...args], { stdio: 'ignore' });

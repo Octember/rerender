@@ -3,6 +3,8 @@
 // solution for ζ<1 and the critically-damped solution for ζ≥1 (yes, even when
 // overdamped). A single analytic eval diverges from this for non-default configs
 // (e.g. damping:100 mass:0.5), so we replicate the stepping exactly.
+import { measureSpring } from './measure-spring';
+
 export interface SpringConfig {
   damping?: number;
   mass?: number;
@@ -66,15 +68,31 @@ export function spring({
   config = {},
   from = 0,
   to = 1,
+  durationInFrames,
+  durationRestThreshold,
+  delay = 0,
+  reverse = false,
 }: {
   frame: number;
   fps: number;
   config?: SpringConfig;
   from?: number;
   to?: number;
+  durationInFrames?: number;
+  durationRestThreshold?: number;
+  delay?: number;
+  reverse?: boolean;
 }): number {
   const { overshootClamping } = { ...DEFAULT, ...config };
-  const current = springCalculation(frame, fps, config);
+  // When a duration is requested, scale time by the spring's natural duration.
+  const needsNatural = reverse || durationInFrames !== undefined;
+  const natural = needsNatural ? measureSpring({ fps, config, threshold: durationRestThreshold }) : 0;
+  const reverseProcessed = reverse ? (durationInFrames ?? natural) - frame : frame;
+  const delayProcessed = reverseProcessed + (reverse ? delay : -delay);
+  const durationProcessed = durationInFrames === undefined ? delayProcessed : delayProcessed / (durationInFrames / natural);
+  if (durationInFrames !== undefined && delayProcessed > durationInFrames) return to;
+
+  const current = springCalculation(durationProcessed, fps, config);
   const inner = overshootClamping ? (to >= from ? Math.min(current, to) : Math.max(current, to)) : current;
   return from === 0 && to === 1 ? inner : from + (to - from) * inner;
 }

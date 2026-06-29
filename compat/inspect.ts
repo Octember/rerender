@@ -22,10 +22,11 @@ const FRAME = Number(process.argv[3] ?? 60);
 const KEY = process.argv[4]; // optional "r,g,b" — measure this element's bbox in each render
 const DOM = process.argv[5]; // optional CSS selector — dump remover's DOM ancestor chain
 const BASE = process.env.RENDER_URL ?? 'http://127.0.0.1:5175';
-// numeric-prefixed ids are examples (remotion/index.ts entry); else the studio template.
+// numeric-prefixed ids are examples (remotion/index.ts entry); else a studio template.
 const IS_EXAMPLE = /^\d/.test(ID);
-const REMOTION_ENTRY = IS_EXAMPLE ? 'remotion/index.ts' : 'template/src/index.ts';
-const REMOVER_PAGE = IS_EXAMPLE ? 'render/' : 'render/studio.html';
+const TEMPLATE = process.env.TEMPLATE ?? 'helloworld';
+const REMOTION_ENTRY = IS_EXAMPLE ? 'remotion/index.ts' : `templates/${TEMPLATE}/src/index.ts`;
+const REMOVER_PAGE = IS_EXAMPLE ? `render/?step=1&comp=${ID}` : `render/studio.html?step=1&template=${TEMPLATE}&comp=${ID}`;
 const OUTDIR = join(process.cwd(), 'compat', 'out');
 function readPng(p: string): PNG {
   const png = PNG.sync.read(readFileSync(p));
@@ -65,7 +66,7 @@ async function dumpRemoverDom(selector: string): Promise<void> {
   try {
     const page = await browser.newPage();
     await page.setViewport({ width: 1920, height: 1080, deviceScaleFactor: 1 });
-    await page.goto(`${BASE}/${REMOVER_PAGE}?step=1&comp=${ID}`, { waitUntil: 'load' });
+    await page.goto(`${BASE}/${REMOVER_PAGE}`, { waitUntil: 'load' });
     await page.waitForFunction(() => window.__ready === true, { timeout: 60_000 });
     await page.evaluate((f) => window.__setFrame!(f), FRAME);
     const chain = await page.evaluate((sel) => {
@@ -94,7 +95,7 @@ async function main(): Promise<void> {
 
   // render the SAME project on both engines at the frame
   const mp4 = join(OUTDIR, `inspect-${ID}.mp4`);
-  const env = IS_EXAMPLE ? { ...process.env } : { ...process.env, STUDIO: '1' };
+  const env = IS_EXAMPLE ? { ...process.env } : { ...process.env, STUDIO: '1', TEMPLATE };
   execFileSync('npx', ['tsx', 'render/render.ts', '1', ID, mp4], { stdio: 'ignore', env });
   execFileSync('ffmpeg', ['-y', '-i', mp4, '-vf', `select='eq(n\\,${FRAME})'`, '-frames:v', '1', removerPng], { stdio: 'ignore' });
   execFileSync('npx', ['remotion', 'still', REMOTION_ENTRY, ID, remotionPng, `--frame=${FRAME}`], { stdio: 'ignore' });

@@ -24,6 +24,7 @@
   "devDependencies": {
     "@puppeteer/browsers": "^3.0.5",
     "@remotion/cli": "^4.0.484",
+    "@remotion/google-fonts": "^4.0.484",
     "@remotion/media-utils": "^4.0.484",
     "@remotion/transitions": "^4.0.484",
     "@remotion/zod-types": "^4.0.484",
