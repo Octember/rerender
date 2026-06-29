@@ -160,7 +160,7 @@ export function ExportDemo(): JSX.Element {
       <ExportPanel
         Component={FootageComp}
         title="Real footage"
-        blurb="Same pipeline, but with a <Video>. foreignObject can't paint video, so each frame the live video is drawn to a canvas and baked into the capture as an image — z-order preserved. Real footage, exported with no server."
+        blurb="Same pipeline, but with a <Video>. foreignObject can't paint video, so each frame the video is composited natively to the canvas first and the DOM overlay (text, scrim) is drawn on top. Real footage, exported with no server."
       />
     </div>
   );

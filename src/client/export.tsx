@@ -3,8 +3,9 @@
 // serializing the live DOM into an SVG <foreignObject> and rasterizing it to a canvas
 // (the in-browser stand-in for a CDP screenshot), then encode with WebCodecs + mux with
 // mediabunny — both already browser-native. Result: an mp4 Blob produced entirely in the
-// user's tab. Works for inline-styled compositions (the Remotion/remover convention);
-// <video> frames and backdrop-filter are not captured by foreignObject (see exportToMp4).
+// user's tab. Works for inline-styled compositions (the Remotion/remover convention).
+// <video> is handled by compositing it natively under the foreignObject (see paintFrame);
+// backdrop-filter and other compositor-only effects still aren't captured.
 import { type ComponentType, type ReactElement, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
