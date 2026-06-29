@@ -62,6 +62,19 @@ function errorList(err: unknown): { message: string; stack?: string }[] {
   return [{ message: e?.message ?? String(err), stack: e?.stack }];
 }
 
+// Bevyl passes Remotion's codec names (h264/h265); remover's WebCodecs encoder speaks the
+// mediabunny names (avc/hevc/…). Translate at the boundary; unsupported codecs fall back to avc.
+const REMOTION_TO_VIDEO_CODEC: Record<string, VideoCodec> = {
+  h264: 'avc',
+  avc: 'avc',
+  h265: 'hevc',
+  hevc: 'hevc',
+  vp9: 'vp9',
+  av1: 'av1',
+};
+const toVideoCodec = (codec: string | undefined): VideoCodec | undefined =>
+  codec === undefined ? undefined : (REMOTION_TO_VIDEO_CODEC[codec] ?? 'avc');
+
 async function postWebhook(cfg: WebhookConfig, payload: WebhookPayload): Promise<void> {
   const body = JSON.stringify(payload);
   try {
@@ -113,7 +126,7 @@ async function launch(event: LaunchEvent): Promise<void> {
         serveUrl: b.serveUrl,
         outputLocation: out,
         inputProps: event.inputProps ?? {},
-        videoCodec: event.codec as VideoCodec | undefined,
+        videoCodec: toVideoCodec(event.codec),
         muted: event.muted,
         scale: event.scale,
         imageFormat: event.imageFormat,

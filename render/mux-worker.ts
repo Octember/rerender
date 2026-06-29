@@ -8,6 +8,7 @@ import {
   BufferTarget,
   EncodedPacketSink,
   EncodedVideoPacketSource,
+  getFirstEncodableAudioCodec,
   Input,
   MP4,
   Mp4OutputFormat,
@@ -54,10 +55,21 @@ async function mux(positions: MuxPosition[], fps: number, codec: VideoCodec, sam
   if (!videoTrack) throw new Error('mux: silent video has no video track');
   const videoSink = new EncodedPacketSink(videoTrack);
 
-  const out = new Output({ format: new Mp4OutputFormat(), target: new BufferTarget() });
+  const format = new Mp4OutputFormat();
+  const out = new Output({ format, target: new BufferTarget() });
   const videoSource = new EncodedVideoPacketSource(codec);
   out.addVideoTrack(videoSource, { frameRate: fps });
-  const audioSource = new AudioBufferSource({ codec: 'aac', bitrate: 192_000 });
+  // chrome-headless-shell on AWS Lambda can't encode some AAC configs (the licensed encoder
+  // isn't always present); pick the first codec that's both mp4-compatible AND actually
+  // encodable in this browser — AAC where available, otherwise Opus — instead of hard-failing.
+  const audioBitrate = 128_000;
+  const audioCodec = await getFirstEncodableAudioCodec(format.getSupportedAudioCodecs(), {
+    numberOfChannels: 2,
+    sampleRate,
+    bitrate: audioBitrate,
+  });
+  if (!audioCodec) throw new Error('mux: no encodable mp4 audio codec available in this browser');
+  const audioSource = new AudioBufferSource({ codec: audioCodec, bitrate: audioBitrate });
   out.addAudioTrack(audioSource);
   await out.start();
 
