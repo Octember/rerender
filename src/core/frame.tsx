@@ -1,7 +1,7 @@
 // The frame clock + composition config, as React context — Remotion-compatible.
 // Because compositions render to real DOM, useCurrentFrame() just drives a normal
 // React re-render and the browser paints. That's the whole renderer.
-import { Children, createContext, isValidElement, useContext, type ComponentType, type ReactNode } from 'react';
+import { Children, createContext, isValidElement, useContext, type ComponentType, type CSSProperties, type ReactNode } from 'react';
 import { AbsoluteFill } from './primitives';
 
 export interface VideoConfig {
@@ -63,18 +63,35 @@ export function CompositionFrame({
 export function Sequence({
   from = 0,
   durationInFrames = Number.POSITIVE_INFINITY,
+  premountFor = 0,
   layout = 'absolute-fill',
+  style,
+  // showInTimeline is a studio-timeline display hint; the renderer ignores it.
+  showInTimeline: _showInTimeline,
   children,
 }: {
   from?: number;
   durationInFrames?: number;
+  /** mount the children this many frames before `from` (invisible) so media preloads. */
+  premountFor?: number;
   layout?: 'absolute-fill' | 'none';
+  style?: CSSProperties;
+  showInTimeline?: boolean;
   children: ReactNode;
 }): ReactNode {
   const parent = useCurrentFrame();
   const local = parent - from;
-  if (local < 0 || local >= durationInFrames) return null;
-  const content = layout === 'absolute-fill' ? <AbsoluteFill>{children}</AbsoluteFill> : children;
+  if (local >= durationInFrames || local < -premountFor) return null;
+  // Premount window [from - premountFor, from): render the children (so <Video>/<Img> begin
+  // loading) at their first frame, but invisible, until the sequence actually starts.
+  if (local < 0) {
+    return (
+      <FrameContext.Provider value={0}>
+        <div style={{ opacity: 0, pointerEvents: 'none' }}>{children}</div>
+      </FrameContext.Provider>
+    );
+  }
+  const content = layout === 'absolute-fill' ? <AbsoluteFill style={style}>{children}</AbsoluteFill> : children;
   return <FrameContext.Provider value={local}>{content}</FrameContext.Provider>;
 }
 

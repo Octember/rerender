@@ -21,7 +21,7 @@ export interface AssetPosition {
   startInVideo: number; // first composition frame the asset appears
   duration: number; // frame count
   trimLeft: number; // source-media frame at startInVideo
-  volume: number;
+  volumes: number[]; // per-frame volume over the span (a fade envelope)
   playbackRate: number;
 }
 
@@ -49,7 +49,7 @@ export function calculateAssetPositions(frames: Map<number, CollectedAsset[]>): 
         startInVideo: start,
         duration: end - start + 1,
         trimLeft: a.mediaFrame,
-        volume: a.volume,
+        volumes: Array.from({ length: end - start + 1 }, (_, k) => perFrame.get(start + k)?.volume ?? a.volume),
         playbackRate: a.playbackRate,
       });
     };
@@ -85,7 +85,8 @@ export async function muxAudio(
     startInVideo: p.startInVideo,
     duration: p.duration,
     trimLeft: p.trimLeft,
-    volume: p.volume,
+    volumes: p.volumes,
+    playbackRate: p.playbackRate,
   }));
 
   const worker = await spawnWorkerBrowser(await chromeExecutable(), MUX_WORKER, (pathname, res) => {

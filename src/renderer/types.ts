@@ -7,7 +7,9 @@ export interface MuxPosition {
   startInVideo: number; // composition frame the asset starts at
   duration: number; // frame count
   trimLeft: number; // source-media frame at start
-  volume: number;
+  /** per-frame volume over the span (length === duration) — a fade envelope. */
+  volumes: number[];
+  playbackRate: number;
 }
 
 // CompositionConfig — matches @remotion/renderer's resolved composition shape.

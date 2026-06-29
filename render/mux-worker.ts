@@ -36,10 +36,15 @@ async function mux(positions: MuxPosition[], fps: number, codec: VideoCodec, sam
     }
     const node = ctx.createBufferSource();
     node.buffer = buffer;
+    node.playbackRate.value = p.playbackRate;
     const gain = ctx.createGain();
-    gain.gain.value = p.volume;
+    // per-frame volume envelope (fades): schedule each frame's volume at its timeline time.
+    const start = p.startInVideo / fps;
+    for (let i = 0; i < p.volumes.length; i++) gain.gain.setValueAtTime(p.volumes[i]!, start + i / fps);
     node.connect(gain).connect(ctx.destination);
-    node.start(p.startInVideo / fps, p.trimLeft / fps, p.duration / fps);
+    // play `duration` composition-frames of source; at playbackRate that's duration·rate
+    // source-frames, so the clip exactly fills its timeline window.
+    node.start(start, p.trimLeft / fps, (p.duration * p.playbackRate) / fps);
   }
   const mixed = await ctx.startRendering();
 
