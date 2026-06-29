@@ -2,14 +2,14 @@
 // a headless browser, let the registered Root populate the registry, read it back.
 import { chromeExecutable } from '../../render/browser';
 import { launchBrowser } from './capture';
-import type { VideoConfig } from './types';
+import type { CompositionConfig } from './types';
 
 function pageUrl(serveUrl: string, id: string, inputProps: Record<string, unknown>): string {
   const props = encodeURIComponent(JSON.stringify(inputProps));
   return `${serveUrl}/?step=1&comp=${encodeURIComponent(id)}&props=${props}`;
 }
 
-export async function getCompositions(options: { serveUrl: string; inputProps?: Record<string, unknown> }): Promise<VideoConfig[]> {
+export async function getCompositions(options: { serveUrl: string; inputProps?: Record<string, unknown> }): Promise<CompositionConfig[]> {
   const { serveUrl, inputProps = {} } = options;
   const browser = await launchBrowser(await chromeExecutable());
   try {
@@ -28,7 +28,7 @@ export async function selectComposition(options: {
   serveUrl: string;
   id: string;
   inputProps?: Record<string, unknown>;
-}): Promise<VideoConfig> {
+}): Promise<CompositionConfig> {
   const all = await getCompositions({ serveUrl: options.serveUrl, inputProps: options.inputProps });
   const found = all.find((c) => c.id === options.id);
   if (!found) throw new Error(`No composition with id "${options.id}". Found: ${all.map((c) => c.id).join(', ') || '(none)'}`);

@@ -10,8 +10,8 @@ export interface MuxPosition {
   volume: number;
 }
 
-// VideoConfig — matches @remotion/renderer's resolved composition shape.
-export interface VideoConfig {
+// CompositionConfig — matches @remotion/renderer's resolved composition shape.
+export interface CompositionConfig {
   id: string;
   width: number;
   height: number;

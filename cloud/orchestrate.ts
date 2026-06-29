@@ -8,12 +8,11 @@ import { join } from 'node:path';
 import { concatSegments } from '../src/renderer/encode';
 import { bundle } from '../src/renderer/bundle';
 import { selectComposition } from '../src/renderer/select-composition';
-import type { VideoCodec, VideoConfig } from '../src/renderer/types';
+import type { VideoCodec, CompositionConfig } from '../src/renderer/types';
 
 export interface SegmentJob {
-  comp: string;
   /** the orchestrator-resolved composition, so the worker can skip selectComposition. */
-  composition: VideoConfig;
+  composition: CompositionConfig;
   props: Record<string, unknown>;
   frameRange: [number, number]; // inclusive [lo, hi]
   index: number;
@@ -55,7 +54,7 @@ export async function orchestrateRender(opts: OrchestrateOptions): Promise<{ sli
     let done = 0;
     await Promise.all(
       slices.map(async (frameRange, index) => {
-        await opts.invoke({ comp: opts.comp, composition, props: opts.props ?? {}, frameRange, index }, segmentPaths[index]!);
+        await opts.invoke({ composition, props: opts.props ?? {}, frameRange, index }, segmentPaths[index]!);
         opts.onProgress?.(++done, slices.length);
       }),
     );

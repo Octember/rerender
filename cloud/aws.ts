@@ -25,7 +25,6 @@ export function awsInvoker(opts: AwsInvokerOptions): Invoker {
         FunctionName: opts.functionName,
         Payload: Buffer.from(
           JSON.stringify({
-            comp: job.comp,
             composition: job.composition,
             props: job.props,
             frameRange: job.frameRange,

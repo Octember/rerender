@@ -7,8 +7,7 @@ import { cpSync, existsSync, readFileSync } from 'node:fs';
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { bundle } from '../src/renderer/bundle';
 import { renderMedia } from '../src/renderer/render-media';
-import { selectComposition } from '../src/renderer/select-composition';
-import type { VideoConfig } from '../src/renderer/types';
+import type { CompositionConfig } from '../src/renderer/types';
 
 const ENTRY = process.env.REMOVER_ENTRY ?? '/var/task/project/src/index.ts';
 const s3 = new S3Client({});
@@ -25,9 +24,9 @@ if (existsSync(BAKED_VITE_CACHE) && !existsSync('/tmp/.vite-cache')) {
 }
 
 export interface SegmentEvent {
-  comp: string;
-  /** pre-resolved by the orchestrator → lets the worker skip selectComposition (a chrome launch). */
-  composition?: VideoConfig;
+  /** the composition, resolved once by the orchestrator (which bundles + selects to plan
+   *  slices) — so the worker skips a redundant selectComposition + its chrome launch. */
+  composition: CompositionConfig;
   props?: Record<string, unknown>;
   frameRange: [number, number]; // inclusive [lo, hi]
   bucket: string;
@@ -35,8 +34,8 @@ export interface SegmentEvent {
 }
 
 export async function handler(event: SegmentEvent): Promise<{ bucket: string; key: string; frames: number }> {
-  // Opt-in per-phase timing (REMOVER_PHASE_TIMING=1) — useful for diagnosing cold-start
-  // cost in CloudWatch without logging on every production invocation.
+  // Opt-in per-phase timing (REMOVER_PHASE_TIMING=1) — diagnose cold-start cost in
+  // CloudWatch without logging on every production invocation. Coarse phases only.
   const timing = !!process.env.REMOVER_PHASE_TIMING;
   const start = Date.now();
   const mark = (label: string): void => {
@@ -45,21 +44,14 @@ export async function handler(event: SegmentEvent): Promise<{ bucket: string; ke
   const b = await bundle(ENTRY);
   mark('bundle');
   try {
-    const composition =
-      event.composition ?? (await selectComposition({ serveUrl: b.serveUrl, id: event.comp, inputProps: event.props ?? {} }));
-    mark('composition');
     const out = `/tmp/seg-${event.frameRange[0]}-${event.frameRange[1]}.mp4`;
     await renderMedia({
-      composition,
+      composition: event.composition,
       serveUrl: b.serveUrl,
       outputLocation: out,
       inputProps: event.props ?? {},
       frameRange: event.frameRange,
       muted: true, // coordinator mixes audio across the whole timeline
-      onProgress: ({ progress }) => {
-        if (progress === 0.7) mark('capture');
-        else if (progress === 0.85) mark('encode');
-      },
     });
     mark('renderMedia');
     await s3.send(new PutObjectCommand({ Bucket: event.bucket, Key: event.key, Body: readFileSync(out), ContentType: 'video/mp4' }));

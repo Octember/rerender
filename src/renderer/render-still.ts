@@ -4,10 +4,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromeExecutable } from '../../render/browser';
 import { captureFrames } from './capture';
-import type { VideoConfig } from './types';
+import type { CompositionConfig } from './types';
 
 export async function renderStill(options: {
-  composition: VideoConfig;
+  composition: CompositionConfig;
   serveUrl: string;
   output: string;
   frame?: number;

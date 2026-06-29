@@ -9,10 +9,10 @@ import type { CollectedAsset } from '../core/assets';
 import { calculateAssetPositions, muxAudio } from './audio';
 import { captureFrames, type CaptureOptions } from './capture';
 import { concatSegments, startEncoder, type VideoCodec } from './encode';
-import type { VideoConfig } from './types';
+import type { CompositionConfig } from './types';
 
 export interface RenderMediaOptions {
-  composition: VideoConfig;
+  composition: CompositionConfig;
   serveUrl: string;
   outputLocation: string;
   inputProps?: Record<string, unknown>;

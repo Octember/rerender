@@ -120,8 +120,11 @@ export async function deploy(opts: DeployOptions): Promise<DeployResult> {
   // CloudFormation doesn't re-pull a :latest tag whose URI is unchanged, so an updated
   // image would be ignored. Force the function onto the just-pushed digest.
   console.log('• pointing function at the pushed image…');
-  run(`aws lambda update-function-code --region ${region} --function-name ${functionName} --image-uri ${imageUri} > /dev/null`);
-  run(`aws lambda wait function-updated-v2 --region ${region} --function-name ${functionName}`);
+  execFileSync('aws', ['lambda', 'update-function-code', '--region', region, '--function-name', functionName, '--image-uri', imageUri], {
+    cwd: REPO_ROOT,
+    stdio: ['ignore', 'ignore', 'inherit'], // suppress the function-config JSON dump, keep errors
+  });
+  runFile('aws', ['lambda', 'wait', 'function-updated-v2', '--region', region, '--function-name', functionName]);
 
   return { functionName, bucketName: get('BucketName'), region, imageUri };
 }
