@@ -12,7 +12,15 @@
     ".": "./src/index.ts",
     "./package.json": "./package.json"
   },
-  "files": ["bin", "src", "render", "cloud", "tsconfig.json", "README.md", "LICENSE"],
+  "files": [
+    "bin",
+    "src",
+    "render",
+    "cloud",
+    "tsconfig.json",
+    "README.md",
+    "LICENSE"
+  ],
   "bin": {
     "remover": "bin/remover.mjs"
   },
