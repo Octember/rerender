@@ -19,6 +19,9 @@ export interface ClientExportOptions {
   config: VideoConfig;
   codec?: VideoCodec;
   onProgress?: (done: number, total: number) => void;
+  /** Called after each frame is painted, with the live capture canvas — for a preview/filmstrip
+   *  during export. The canvas is reused every frame, so snapshot it synchronously if needed. */
+  onFrame?: (canvas: HTMLCanvasElement, frame: number) => void;
   signal?: AbortSignal;
 }
 
@@ -72,6 +75,16 @@ async function settleVideos(stage: HTMLElement): Promise<void> {
     Array.from(stage.querySelectorAll('video')).map(async (v) => {
       if (v.seeking) await once(v, 'seeked');
       else if (v.readyState < 2) await once(v, 'loadeddata');
+      // `seeked` fires when currentTime updates, but the frame for that time may not be
+      // decoded/presentable yet — drawImage would then capture black. Wait one
+      // requestVideoFrameCallback (a presented frame), time-bounded so a throttled tab can't hang.
+      const rvfc = (v as HTMLVideoElement & { requestVideoFrameCallback?: (cb: () => void) => number }).requestVideoFrameCallback;
+      if (rvfc) {
+        await new Promise<void>((res) => {
+          rvfc.call(v, () => res());
+          setTimeout(res, 60);
+        });
+      }
     }),
   );
 }
@@ -116,7 +129,7 @@ async function paintFrame(stage: HTMLElement, ctx: CanvasRenderingContext2D, w: 
 
 /** Render `Component` to an mp4 Blob entirely in the browser — no server, no ffmpeg. */
 export async function exportToMp4(opts: ClientExportOptions): Promise<Blob> {
-  const { Component, props = {}, config, codec = 'avc', onProgress, signal } = opts;
+  const { Component, props = {}, config, codec = 'avc', onProgress, onFrame, signal } = opts;
   const { width, height, fps, durationInFrames } = config;
 
   // Mount the composition offscreen. Drive the frame via a stable setter captured in a ref
@@ -153,6 +166,7 @@ export async function exportToMp4(opts: ClientExportOptions): Promise<Blob> {
       flushSync(() => setFrameRef.current(f));
       await settleVideos(stage); // ensure <video>s are decodable + seeked to frame f
       await paintFrame(stage, ctx, width, height);
+      onFrame?.(canvas, f);
       await source.add(f / fps, 1 / fps, f === 0 ? { keyFrame: true } : undefined);
       onProgress?.(f + 1, durationInFrames);
     }
