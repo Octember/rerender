@@ -5,20 +5,13 @@
 // Used by the examples render page and the studio (registered-Root) page.
 import { useEffect, useState, type ComponentType } from 'react';
 import { flushSync } from 'react-dom';
-import { ConfigContext, FrameContext, PlayingContext, TimelineContext } from '../src/core/frame';
+import { ConfigContext, FrameContext, PlayingContext, TimelineContext, type VideoConfig } from '../src/core/frame';
 import { getPendingDelays } from '../src/core/delay-render';
 import { injectRemoverCSS } from '../src/core/default-css';
 
 // Module-load side effects (this module only ever executes in the render/studio browser):
 injectRemoverCSS(); // match Remotion's global reset (box-sizing: border-box)
 if (typeof window !== 'undefined') window.__removerEnv = 'rendering';
-
-export interface StageConfig {
-  width: number;
-  height: number;
-  fps: number;
-  durationInFrames: number;
-}
 
 declare global {
   interface Window {
@@ -55,7 +48,7 @@ async function settle(): Promise<void> {
 interface FrameProps {
   Component: ComponentType<Record<string, unknown>>;
   props: Record<string, unknown>;
-  config: StageConfig;
+  config: VideoConfig;
   playing: boolean;
   frame: number;
 }
@@ -79,7 +72,7 @@ function Frame({ Component, props, config, playing, frame }: FrameProps): JSX.El
 interface StageProps {
   Component: ComponentType<Record<string, unknown>>;
   props: Record<string, unknown>;
-  config: StageConfig;
+  config: VideoConfig;
   from: number;
   to: number;
   stepMode: boolean;

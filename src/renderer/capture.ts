@@ -5,7 +5,7 @@
 import puppeteer, { type Browser } from 'puppeteer-core';
 import { renameSync } from 'node:fs';
 import { join } from 'node:path';
-import type { StageConfig } from '../../render/stage';
+import type { VideoConfig } from '../core/frame';
 import type { CollectedAsset } from '../core/assets';
 
 const RENDER_ARGS = [
@@ -55,7 +55,7 @@ async function captureRange(
   lo: number,
   hi: number,
   dir: string,
-  cfg: StageConfig,
+  cfg: VideoConfig,
   opts: CaptureOptions = {},
 ): Promise<Map<number, CollectedAsset[]>> {
   const scale = opts.scale ?? 1;
@@ -104,7 +104,7 @@ export async function captureFrames(
   lo: number,
   hi: number,
   dir: string,
-  cfg: StageConfig,
+  cfg: VideoConfig,
   opts: CaptureOptions = {},
 ): Promise<Map<number, CollectedAsset[]>> {
   const browser = await launchBrowser(executablePath);
