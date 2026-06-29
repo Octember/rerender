@@ -57,7 +57,10 @@ export async function renderMedia(
     const frameFiles = Array.from({ length: totalFrames }, (_, i) => `f-${String(from + i).padStart(5, '0')}.${ext}`);
 
     // No ffmpeg. Three in-process phases:
-    // 1. Capture every slice in parallel (N browsers screenshot their frame range).
+    // 1. Capture every slice in parallel. One browser per slice, NOT one browser with N
+    //    pages — capture is CDP-command-heavy (setFrame + screenshot per frame) and a
+    //    single browser shares one CDP connection, serializing those commands; N
+    //    browsers give N parallel CDP connections and measured ~2x faster.
     const maps = await Promise.all(ranges.map(([a, b]) => captureFrames(exe, stepUrl, a, b, dir, c, captureOpts)));
     opts.onProgress?.({ renderedFrames: totalFrames, progress: 0.7 });
 

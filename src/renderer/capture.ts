@@ -56,10 +56,11 @@ export interface CaptureOptions {
   collectAudio?: boolean;
 }
 
-/** Capture frames [lo, hi) into `dir` as f-NNNNN.{png|jpg}; returns the media assets
- *  registered at each frame (for the audio mix) when collectAudio is set. */
-export async function captureFrames(
-  executablePath: string,
+/** Capture frames [lo, hi) into `dir` as f-NNNNN.{png|jpg} using ONE page of an
+ *  already-launched browser; returns the media assets registered at each frame (for the
+ *  audio mix) when collectAudio is set. */
+export async function captureRange(
+  browser: Browser,
   stepUrl: string,
   lo: number,
   hi: number,
@@ -70,9 +71,8 @@ export async function captureFrames(
   const scale = opts.scale ?? 1;
   const jpeg = opts.imageFormat === 'jpeg';
   const assets = new Map<number, CollectedAsset[]>();
-  const browser = await launchBrowser(executablePath);
+  const page = await browser.newPage();
   try {
-    const page = await browser.newPage();
     await page.setViewport({ width: cfg.width, height: cfg.height, deviceScaleFactor: scale });
     await page.goto(stepUrl, { waitUntil: 'load' });
     await page.waitForFunction(() => window.__ready === true, { timeout: 60_000 });
@@ -99,7 +99,28 @@ export async function captureFrames(
       if (a.length) assets.set(f, a);
     }
   } finally {
-    await browser.close();
+    await page.close();
   }
   return assets;
+}
+
+/** Launch a browser, capture [lo, hi) in one page, close. render-media runs N of these
+ *  in parallel (one browser per slice) — NOT one browser with N pages: capture is
+ *  CDP-command-heavy and a single browser shares one CDP connection that serializes the
+ *  per-frame commands, so N browsers (N parallel CDP connections) measured ~2x faster. */
+export async function captureFrames(
+  executablePath: string,
+  stepUrl: string,
+  lo: number,
+  hi: number,
+  dir: string,
+  cfg: StageConfig,
+  opts: CaptureOptions = {},
+): Promise<Map<number, CollectedAsset[]>> {
+  const browser = await launchBrowser(executablePath);
+  try {
+    return await captureRange(browser, stepUrl, lo, hi, dir, cfg, opts);
+  } finally {
+    await browser.close();
+  }
 }
