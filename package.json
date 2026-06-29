@@ -7,7 +7,11 @@
   "type": "module",
   "private": true,
   "main": "./src/index.ts",
+  "bin": {
+    "remover": "bin/remover.mjs"
+  },
   "scripts": {
+    "remover": "tsx src/cli.ts",
     "dev": "vite",
     "build": "vite build",
     "render": "tsx render/render.ts",
