@@ -49,5 +49,12 @@ ENV REMOVER_ENTRY=${LAMBDA_TASK_ROOT}/project/src/index.ts
 # (--platform) and run as an x86_64 Lambda; arm64/Graviton can't execute the binary.
 RUN node --import tsx -e "import('./render/browser.ts').then(m => m.chromeExecutable()).then(p => console.log('chrome installed:', p))"
 
+# Pre-bake Vite's dep-optimizer cache for the baked project (optimizeDeps.entries scans
+# the entry at server start), so a cold worker doesn't pay the ~4s optimize. handler.ts
+# copies this into /tmp on cold start.
+RUN REMOVER_VITE_CACHE=/var/task/.vite-cache-baked node --import tsx -e \
+  "import('./src/renderer/bundle.ts').then(async m => { const b = await m.bundle(process.env.REMOVER_ENTRY); await new Promise(r => setTimeout(r, 5000)); await b.close(); process.exit(0); }).catch(e => { console.error(e); process.exit(1); })" \
+  && echo "baked vite cache:" && ls /var/task/.vite-cache-baked 2>/dev/null || true
+
 # The AWS runtime interface client loads cloud/handler.mjs, which tsx-loads the TS handler.
 CMD ["cloud/handler.handler"]

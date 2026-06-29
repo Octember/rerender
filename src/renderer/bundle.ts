@@ -39,8 +39,9 @@ export async function bundle(entryPoint: string, options: { port?: number } = {}
     configFile: false,
     root: userRoot,
     // Vite's dep-optimizer cache defaults to <root>/node_modules/.vite, but on AWS Lambda
-    // the image filesystem is read-only except /tmp — point it there.
-    cacheDir: process.env.AWS_LAMBDA_FUNCTION_NAME ? '/tmp/.vite-cache' : undefined,
+    // the image fs is read-only except /tmp. REMOVER_VITE_CACHE lets the image build
+    // pre-populate the cache (so the worker doesn't pay the ~4s optimize on cold start).
+    cacheDir: process.env.REMOVER_VITE_CACHE ?? (process.env.AWS_LAMBDA_FUNCTION_NAME ? '/tmp/.vite-cache' : undefined),
     clearScreen: false,
     logLevel: 'silent',
     plugins: [
@@ -68,7 +69,9 @@ export async function bundle(entryPoint: string, options: { port?: number } = {}
     // dedupe react: remover's modules are served from /@fs/ (outside the user root),
     // so without this the dep optimizer loads a second React copy → "Invalid hook call".
     resolve: { alias: removerAliases, dedupe: ['react', 'react-dom'] },
-    optimizeDeps: { include: ['react', 'react-dom', 'react-dom/client', 'react/jsx-runtime', 'react/jsx-dev-runtime'] },
+    // entries: scan the project entry at startup so the user's deps (zod, @remotion/*) are
+    // optimized up front instead of discovered mid-page-load (which triggers a reload).
+    optimizeDeps: { include: ['react', 'react-dom', 'react-dom/client', 'react/jsx-runtime', 'react/jsx-dev-runtime'], entries: [entry] },
     server: { port: options.port ?? 0, strictPort: Boolean(options.port), fs: { allow: [userRoot, REMOVER_ROOT] }, hmr: false },
   });
 
