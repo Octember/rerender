@@ -11,13 +11,13 @@ import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import {
   ALL_FORMATS,
+  BlobSource,
   BufferTarget,
   CanvasSource,
   Input,
   Mp4OutputFormat,
   Output,
   QUALITY_HIGH,
-  UrlSource,
   type VideoSample,
   VideoSampleSink,
 } from 'mediabunny';
@@ -109,7 +109,10 @@ async function openVideoSinks(stage: HTMLElement): Promise<Map<string, VideoSamp
   );
   for (const src of srcs) {
     try {
-      const input = new Input({ formats: ALL_FORMATS, source: new UrlSource(src) });
+      // Fetch the whole clip into memory and decode from a BlobSource — no HTTP range
+      // requests, so this works on hosts that don't serve 206 (e.g. Cloudflare Workers assets).
+      const blob = await (await fetch(src)).blob();
+      const input = new Input({ formats: ALL_FORMATS, source: new BlobSource(blob) });
       const track = await input.getPrimaryVideoTrack();
       if (track) sinks.set(src, new VideoSampleSink(track));
     } catch {

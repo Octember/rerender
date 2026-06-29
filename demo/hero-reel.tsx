@@ -42,8 +42,10 @@ export function HeroReel(): JSX.Element {
   const pop = (delay: number): number => spring({ frame: frame - delay, fps, config: { damping: 13, stiffness: 120 } });
   const subO = interpolate(frame, [22, 38], [0, 1], { extrapolateRight: 'clamp' });
 
+  // Root is transparent behind the <Video>: the export composites the footage UNDER the
+  // foreignObject overlay, so an opaque root background here would paint over the video.
   return (
-    <AbsoluteFill style={{ background: '#06060a', fontFamily: FONT, overflow: 'hidden' }}>
+    <AbsoluteFill style={{ fontFamily: FONT, overflow: 'hidden' }}>
       {/* real footage */}
       <Video src={staticFile('demo-clip.mp4')} style={{ width: '100%', height: '100%', objectFit: 'cover', transform: `scale(${ken})` }} />
 
