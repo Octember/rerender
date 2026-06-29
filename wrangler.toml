@@ -1,0 +1,11 @@
+# Deploys the demo (demo/ → `vite build` → dist/) as an assets-only Cloudflare Worker.
+# Live: https://remover-demo.noah-9fb.workers.dev
+#
+#   npm run build && npx wrangler deploy
+#
+# Auth is via env: CLOUDFLARE_API_TOKEN (Workers-scoped) + CLOUDFLARE_ACCOUNT_ID.
+name = "remover-demo"
+compatibility_date = "2025-01-01"
+
+[assets]
+directory = "./dist"
