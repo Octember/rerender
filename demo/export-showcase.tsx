@@ -18,6 +18,15 @@ const DISPLAY_W = 468;
 const DISPLAY_H = (DISPLAY_W * H) / W;
 
 const card: CSSProperties = { background: '#0f0f15', border: '1px solid #23232c', borderRadius: 14, overflow: 'hidden' };
+const bigStat: CSSProperties = {
+  fontSize: 40,
+  fontWeight: 850,
+  lineHeight: 1,
+  background: 'linear-gradient(90deg,#ff5e8a,#ffa14a)',
+  WebkitBackgroundClip: 'text',
+  WebkitTextFillColor: 'transparent',
+  letterSpacing: -1,
+};
 const cardLabel: CSSProperties = {
   fontFamily: 'ui-monospace, monospace',
   fontSize: 11,
@@ -437,18 +446,11 @@ export function ExportShowcase(): JSX.Element {
         {status === 'done' && meta && (
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
             <span style={{ color: '#8a8a99', fontSize: 14 }}>Pixel-perfect render, created in</span>
-            <span
-              style={{
-                fontSize: 40,
-                fontWeight: 850,
-                lineHeight: 1,
-                background: 'linear-gradient(90deg,#ff5e8a,#ffa14a)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                letterSpacing: -1,
-              }}
-            >
-              {meta.secs}s
+            <span style={bigStat}>{meta.secs}s</span>
+            <span style={{ color: '#55555f', fontSize: 22, fontWeight: 300 }}>/</span>
+            <span style={bigStat}>{Number(meta.size) >= 1000 ? `${(Number(meta.size) / 1024).toFixed(1)} MB` : `${meta.size} KB`}</span>
+            <span style={{ color: '#8a8a99', fontSize: 14 }}>
+              of {W}×{H} mp4
             </span>
           </div>
         )}
@@ -474,9 +476,7 @@ export function ExportShowcase(): JSX.Element {
           >
             <span style={{ fontSize: 18 }}>⬇</span> Download the .mp4
           </a>
-          <Badge icon="🎞">
-            {DUR} frames · {W}×{H}
-          </Badge>
+          <Badge icon="🎞">{DUR} frames</Badge>
           <Badge icon="🖥">no server</Badge>
           <Badge icon="🚫">no ffmpeg</Badge>
         </div>
