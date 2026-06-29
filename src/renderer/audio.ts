@@ -5,14 +5,12 @@
 // start(when=startInVideo/fps, offset=trimLeft/fps, duration), through a gain node, all
 // summed by an OfflineAudioContext; the mix is AAC-encoded and muxed alongside the
 // (packet-copied) video. POC: scalar volume, playbackRate 1.
-import { createServer, type Server } from 'node:http';
 import { copyFileSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { CollectedAsset } from '../core/assets';
 import { chromeExecutable } from '../../render/browser';
-import { launchBrowser } from './capture';
 import type { MuxPosition, VideoCodec } from './types';
-import { bundleWorkerHtml } from './worker-bundle';
+import { spawnWorkerBrowser } from './worker-browser';
 
 const MUX_WORKER = fileURLToPath(new URL('../../render/mux-worker.ts', import.meta.url));
 
@@ -81,7 +79,6 @@ export async function muxAudio(
     copyFileSync(silentVideo, output);
     return;
   }
-  const html = await bundleWorkerHtml(MUX_WORKER);
   const durationSec = Math.max(videoDurationSec, ...positions.map((p) => (p.startInVideo + p.duration) / fps));
   const muxPositions: MuxPosition[] = positions.map((p, i) => ({
     assetIndex: i,
@@ -91,38 +88,30 @@ export async function muxAudio(
     volume: p.volume,
   }));
 
-  const server: Server = createServer((req, res) => {
-    const url = (req.url ?? '/').split('?')[0]!;
-    if (url === '/') {
-      res.setHeader('content-type', 'text/html');
-      res.end(html);
-      return;
-    }
-    if (url === '/__silent') {
+  const worker = await spawnWorkerBrowser(await chromeExecutable(), MUX_WORKER, (pathname, res) => {
+    if (pathname === '/__silent') {
       res.setHeader('content-type', 'video/mp4');
       res.end(readFileSync(silentVideo));
-      return;
+      return true;
     }
-    const m = url.match(/^\/__asset\/(\d+)$/);
+    const m = pathname.match(/^\/__asset\/(\d+)$/);
     if (m && positions[Number(m[1])]) {
       res.end(readFileSync(positions[Number(m[1])]!.src));
-      return;
+      return true;
     }
-    res.statusCode = 404;
-    res.end();
+    return false;
   });
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const port = (server.address() as { port: number }).port;
-  const browser = await launchBrowser(await chromeExecutable());
   try {
-    const page = (await browser.pages())[0] ?? (await browser.newPage());
-    page.on('pageerror', (e) => console.error('[muxAudio]', String(e).slice(0, 200)));
-    await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'load' });
-    await page.waitForFunction(() => window.__ready === true, { timeout: 30_000 });
-    const b64 = await page.evaluate((p, f, c, sr, d) => window.__mux!(p, f, c, sr, d), muxPositions, fps, codec, sampleRate, durationSec);
+    const b64 = await worker.page.evaluate(
+      (p, f, c, sr, d) => window.__mux!(p, f, c, sr, d),
+      muxPositions,
+      fps,
+      codec,
+      sampleRate,
+      durationSec,
+    );
     writeFileSync(output, Buffer.from(b64, 'base64'));
   } finally {
-    await browser.close();
-    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await worker.close();
   }
 }
