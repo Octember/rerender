@@ -33,11 +33,27 @@ const str = (v: string | boolean | undefined): string | undefined => (typeof v =
 
 async function main(): Promise<void> {
   const [cmd, ...rest] = process.argv.slice(2);
-  if (cmd !== 'render' && cmd !== 'still' && cmd !== 'studio') {
-    console.error('usage: remover render|still|studio <entry> [comp-id] [output] [flags]');
+  if (cmd !== 'render' && cmd !== 'still' && cmd !== 'studio' && cmd !== 'concat') {
+    console.error('usage: remover render|still|studio <entry> [comp-id] [output] [flags]\n       remover concat --output <out.mp4> <segment0.mp4> <segment1.mp4> …');
     process.exit(1);
   }
   const { positional, flags } = parseArgs(rest);
+
+  // Coordinator step for distributed renders: stitch the segments produced by N workers
+  // (each `remover render <entry> <comp> --frames lo-hi --muted -o segK.mp4`) into one
+  // mp4. Pure mediabunny packet-copy in Node — no browser, no ffmpeg.
+  if (cmd === 'concat') {
+    const output = str(flags.output);
+    if (!output || positional.length === 0) {
+      console.error('usage: remover concat --output <out.mp4> [--fps 30] [--codec avc] <segment0.mp4> <segment1.mp4> …');
+      process.exit(1);
+    }
+    const { concatSegments } = await import('./renderer/encode');
+    await concatSegments(positional.map((s) => resolve(s)), (str(flags.codec) as 'avc' | 'hevc' | 'vp9' | 'av1' | undefined) ?? 'avc', num(flags.fps) ?? 30, resolve(output));
+    console.log(`✓ concat: ${positional.length} segments → ${output}`);
+    return;
+  }
+
   const [entry, compId, outputPos] = positional;
   if (!entry) { console.error('error: missing entry point (e.g. src/index.ts)'); process.exit(1); }
 
@@ -107,7 +123,8 @@ async function main(): Promise<void> {
       onProgress: ({ progress }) => process.stdout.write(`\r  rendering… ${Math.round(progress * 100)}%`),
     });
     process.stdout.write('\n');
-    console.log(`✓ render: ${composition.id} (${composition.durationInFrames}f @ ${composition.fps}fps, ${composition.width}x${composition.height}) → ${output}  [${((Date.now() - t0) / 1000).toFixed(1)}s]`);
+    const renderedFrames = Array.isArray(frameRange) ? frameRange[1] - frameRange[0] + 1 : composition.durationInFrames;
+    console.log(`✓ render: ${composition.id} (${renderedFrames}f @ ${composition.fps}fps, ${composition.width}x${composition.height}) → ${output}  [${((Date.now() - t0) / 1000).toFixed(1)}s]`);
   } finally {
     await b.close();
   }
