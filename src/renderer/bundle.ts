@@ -38,6 +38,9 @@ export async function bundle(entryPoint: string, options: { port?: number } = {}
   const server = await createServer({
     configFile: false,
     root: userRoot,
+    // Vite's dep-optimizer cache defaults to <root>/node_modules/.vite, but on AWS Lambda
+    // the image filesystem is read-only except /tmp — point it there.
+    cacheDir: process.env.AWS_LAMBDA_FUNCTION_NAME ? '/tmp/.vite-cache' : undefined,
     clearScreen: false,
     logLevel: 'silent',
     plugins: [

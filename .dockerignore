@@ -1,0 +1,15 @@
+node_modules
+.git
+out
+compat/out
+.vite
+**/.vite
+**/.remover-chrome
+bench
+studio
+demo
+**/*.mov
+templates/showcase/public/*.mp4
+templates/showcase/public/*.mp3
+templates/audio-test/public/*.mp3
+!templates/helloworld

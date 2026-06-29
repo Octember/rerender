@@ -31,7 +31,13 @@ export const RENDER_ARGS = [
 ];
 
 export function launchBrowser(executablePath: string): Promise<Browser> {
-  return puppeteer.launch({ executablePath, headless: 'shell', args: RENDER_ARGS });
+  // On AWS Lambda: run the zygote/GPU in-process (the sandbox can't fork them), and talk
+  // to chrome over a pipe (fds) rather than a localhost WebSocket — the WS endpoint is
+  // unreliable on Lambda, which is what "Timed out waiting for the WS endpoint" was.
+  // (HOME=/tmp, set in the image, gives chrome a writable config dir.)
+  const lambda = !!process.env.AWS_LAMBDA_FUNCTION_NAME;
+  const args = lambda ? [...RENDER_ARGS, '--no-zygote', '--in-process-gpu'] : RENDER_ARGS;
+  return puppeteer.launch({ executablePath, headless: 'shell', args, pipe: lambda });
 }
 
 /** Read the composition's config (dims/fps/duration) from the render page itself. */

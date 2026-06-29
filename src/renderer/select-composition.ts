@@ -16,9 +16,10 @@ export async function getCompositions(options: {
   const { serveUrl, inputProps = {} } = options;
   const browser = await launchBrowser(await chromeExecutable());
   try {
-    const page = await browser.newPage();
+    const page = (await browser.pages())[0] ?? (await browser.newPage());
+    page.on('pageerror', (e) => console.error('[remover] composition page error:', String(e).slice(0, 300)));
     await page.goto(pageUrl(serveUrl, '', inputProps), { waitUntil: 'load' });
-    await page.waitForFunction(() => window.__ready === true && Boolean(window.__getCompositions), { timeout: 60_000 });
+    await page.waitForFunction(() => window.__ready === true && Boolean(window.__getCompositions), { timeout: 120_000 });
     const comps = await page.evaluate(() => window.__getCompositions!());
     return comps.map((c) => ({ ...c, props: { ...c.defaultProps, ...inputProps } }));
   } finally {

@@ -1,16 +1,19 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Transform: AWS::Serverless-2016-10-31
 Description: >
   remover cloud — distributed, ffmpeg-free video render on AWS Lambda. One container
-  function renders a frame-range segment to S3; the `remover cloud render` orchestrator
-  fans out N parallel invocations (one per slice) and concatenates the segments. This is
-  the open, MIT equivalent of @remotion/lambda's deployed function + bucket.
+  function renders a frame-range segment to S3; `remover cloud render` fans out N
+  parallel invocations and concatenates the segments. The open, MIT equivalent of
+  @remotion/lambda's deployed function + bucket. Plain CloudFormation (no SAM needed) —
+  `remover cloud deploy` builds + pushes the image and deploys this stack.
 
 Parameters:
+  ImageUri:
+    Type: String
+    Description: ECR image URI for the worker (set by `remover cloud deploy`).
   MemorySize:
     Type: Number
     Default: 3008
-    Description: MB per worker. More memory = more vCPU = faster per-slice capture.
+    Description: MB per worker (more memory = more vCPU = faster per-slice capture).
   Timeout:
     Type: Number
     Default: 600
@@ -18,7 +21,7 @@ Parameters:
   EphemeralStorage:
     Type: Number
     Default: 4096
-    Description: /tmp MB — holds the captured frames + the segment for one slice.
+    Description: /tmp MB — holds one slice's frames + segment.
 
 Resources:
   RenderBucket:
@@ -28,12 +31,37 @@ Resources:
         Rules:
           - Id: expire-segments
             Status: Enabled
-            ExpirationInDays: 1 # segments are intermediate; the final mp4 is downloaded by the client
+            ExpirationInDays: 1
 
-  RemoverWorker:
-    Type: AWS::Serverless::Function
+  WorkerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: render-bucket-rw
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [s3:PutObject, s3:GetObject]
+                Resource: !Sub '${RenderBucket.Arn}/*'
+
+  Worker:
+    Type: AWS::Lambda::Function
     Properties:
       PackageType: Image
+      # x86_64: Chrome-for-Testing has no arm64 chrome-headless-shell.
+      Architectures: [x86_64]
+      Code:
+        ImageUri: !Ref ImageUri
+      Role: !GetAtt WorkerRole.Arn
       MemorySize: !Ref MemorySize
       Timeout: !Ref Timeout
       EphemeralStorage:
@@ -41,17 +69,11 @@ Resources:
       Environment:
         Variables:
           REMOVER_BUCKET: !Ref RenderBucket
-      Policies:
-        - S3CrudPolicy:
-            BucketName: !Ref RenderBucket
-    Metadata:
-      DockerContext: ../
-      Dockerfile: cloud/Dockerfile
 
 Outputs:
   FunctionName:
     Description: Pass to `remover cloud render --function`
-    Value: !Ref RemoverWorker
+    Value: !Ref Worker
   BucketName:
     Description: Pass to `remover cloud render --bucket`
     Value: !Ref RenderBucket

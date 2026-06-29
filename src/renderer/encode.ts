@@ -12,8 +12,7 @@ import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BufferSource, BufferTarget, EncodedPacketSink, EncodedVideoPacketSource, Input, MP4, Mp4OutputFormat, Output } from 'mediabunny';
-import puppeteer from 'puppeteer-core';
-import { RENDER_ARGS } from './capture';
+import { launchBrowser } from './capture';
 import type { VideoCodec } from './types';
 import { bundleWorkerHtml } from './worker-bundle';
 
@@ -60,8 +59,10 @@ export async function startEncoder(opts: { exe: string; frameDir: string; frameF
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const port = (server.address() as { port: number }).port;
-  const browser = await puppeteer.launch({ executablePath: opts.exe, headless: 'shell', args: RENDER_ARGS });
-  const page = await browser.newPage();
+  const browser = await launchBrowser(opts.exe);
+  // Use the browser's already-attached initial page — a fresh newPage() can race the
+  // frame-tree attach over Lambda's pipe transport ("Requesting main frame too early!").
+  const page = (await browser.pages())[0] ?? (await browser.newPage());
   page.on('pageerror', (e) => console.error('[encode]', String(e).slice(0, 200)));
   await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'load' });
   await page.waitForFunction(() => window.__ready === true, { timeout: 30_000 });

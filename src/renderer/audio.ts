@@ -8,10 +8,9 @@
 import { createServer, type Server } from 'node:http';
 import { copyFileSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import puppeteer from 'puppeteer-core';
 import type { CollectedAsset } from '../core/assets';
 import { chromeExecutable } from '../../render/browser';
-import { RENDER_ARGS } from './capture';
+import { launchBrowser } from './capture';
 import type { MuxPosition, VideoCodec } from './types';
 import { bundleWorkerHtml } from './worker-bundle';
 
@@ -88,9 +87,9 @@ export async function muxAudio(
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const port = (server.address() as { port: number }).port;
-  const browser = await puppeteer.launch({ executablePath: await chromeExecutable(), headless: 'shell', args: RENDER_ARGS });
+  const browser = await launchBrowser(await chromeExecutable());
   try {
-    const page = await browser.newPage();
+    const page = (await browser.pages())[0] ?? (await browser.newPage());
     page.on('pageerror', (e) => console.error('[muxAudio]', String(e).slice(0, 200)));
     await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'load' });
     await page.waitForFunction(() => window.__ready === true, { timeout: 30_000 });

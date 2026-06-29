@@ -5,7 +5,6 @@
 //   remover still  <entry> <comp-id> [output] [--frame N]
 import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { bundle } from './renderer/bundle';
 import { getCompositions, selectComposition } from './renderer/select-composition';
 import { renderMedia } from './renderer/render-media';
@@ -44,11 +43,17 @@ async function main(): Promise<void> {
   if (cmd === 'cloud') {
     const sub = positional[0];
     if (sub === 'deploy') {
-      const { spawnSync } = await import('node:child_process');
-      const cwd = fileURLToPath(new URL('../cloud', import.meta.url));
-      const build = spawnSync('sam', ['build', '-t', 'template.yaml'], { cwd, stdio: 'inherit' });
-      if (build.status !== 0) { console.error('sam build failed — is the AWS SAM CLI installed (https://docs.aws.amazon.com/serverless-application-model/)?'); process.exit(1); }
-      spawnSync('sam', ['deploy', '--guided'], { cwd, stdio: 'inherit' });
+      const project = positional[1] ?? str(flags.project);
+      if (!project) {
+        console.error('usage: remover cloud deploy <project-dir> [--region r] [--memory 3008]\n  (project-dir is your video project, with src/index.ts — it gets baked into the worker image)');
+        process.exit(1);
+      }
+      const { deploy } = await import('../cloud/deploy');
+      const r = await deploy({ project: resolve(project), region: str(flags.region), memory: num(flags.memory), build: flags.build !== false, localTag: str(flags['local-tag']) });
+      console.log(`\n✓ deployed to ${r.region}`);
+      console.log(`  function: ${r.functionName}`);
+      console.log(`  bucket:   ${r.bucketName}`);
+      console.log(`  render:   remover cloud render ${project}/src/index.ts <Comp> --function ${r.functionName} --bucket ${r.bucketName} --workers 20 -o out.mp4`);
       return;
     }
     if (sub === 'render') {
