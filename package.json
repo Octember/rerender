@@ -12,6 +12,7 @@
   },
   "scripts": {
     "remover": "tsx src/cli.ts",
+    "studio": "tsx src/cli.ts studio",
     "dev": "vite",
     "build": "vite build",
     "render": "tsx render/render.ts",

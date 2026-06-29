@@ -33,13 +33,24 @@ const str = (v: string | boolean | undefined): string | undefined => (typeof v =
 
 async function main(): Promise<void> {
   const [cmd, ...rest] = process.argv.slice(2);
-  if (cmd !== 'render' && cmd !== 'still') {
-    console.error('usage: remover render|still <entry> <comp-id> [output] [flags]');
+  if (cmd !== 'render' && cmd !== 'still' && cmd !== 'studio') {
+    console.error('usage: remover render|still|studio <entry> [comp-id] [output] [flags]');
     process.exit(1);
   }
   const { positional, flags } = parseArgs(rest);
   const [entry, compId, outputPos] = positional;
   if (!entry) { console.error('error: missing entry point (e.g. src/index.ts)'); process.exit(1); }
+
+  if (cmd === 'studio') {
+    const { studioServer } = await import('./renderer/studio');
+    const s = await studioServer(resolve(entry), { port: num(flags.port) });
+    console.log(`\n  remover studio  →  ${s.url}\n  Ctrl-C to stop.\n`);
+    const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
+    const { spawn } = await import('node:child_process');
+    spawn(opener, [s.url], { stdio: 'ignore', detached: true }).unref();
+    await new Promise(() => undefined); // keep the server alive
+    return;
+  }
 
   let inputProps: Record<string, unknown> = {};
   const propsFlag = str(flags.props);

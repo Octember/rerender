@@ -2,13 +2,15 @@
 // fit, and drives the frame clock. What plays here is exactly what the recorder
 // records — preview and render are the same DOM, by construction.
 import { useEffect, useRef, useState, type ComponentType, type CSSProperties } from 'react';
-import { ConfigContext, FrameContext, PlayingContext, type VideoConfig } from './frame';
+import { ConfigContext, FrameContext, PlayingContext, TimelineContext, type VideoConfig } from './frame';
 import { injectRemoverCSS } from './default-css';
 
 injectRemoverCSS(); // match Remotion's global reset so preview == render == Remotion
 
 export interface PlayerProps extends VideoConfig {
-  composition: ComponentType;
+  composition: ComponentType<Record<string, unknown>>;
+  /** props passed to the composition (merged over its defaultProps by the caller). */
+  inputProps?: Record<string, unknown>;
   controls?: boolean;
   /** Display height in px; the composition is scaled to fit. */
   displayHeight?: number;
@@ -17,6 +19,7 @@ export interface PlayerProps extends VideoConfig {
 
 export function Player({
   composition: Composition,
+  inputProps = {},
   width,
   height,
   fps,
@@ -77,9 +80,11 @@ export function Player({
         >
           <ConfigContext.Provider value={config}>
             <PlayingContext.Provider value={playing}>
-              <FrameContext.Provider value={frame}>
-                <Composition />
-              </FrameContext.Provider>
+              <TimelineContext.Provider value={frame}>
+                <FrameContext.Provider value={frame}>
+                  <Composition {...inputProps} />
+                </FrameContext.Provider>
+              </TimelineContext.Provider>
             </PlayingContext.Provider>
           </ConfigContext.Provider>
         </div>
