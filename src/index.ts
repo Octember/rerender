@@ -23,4 +23,4 @@ export { registerRoot, Composition, Still, Folder, getRoot, getCompositions, get
 export type { CompositionMeta, CompositionProps } from './core/registry';
 
 export { Player } from './core/player';
-export type { PlayerProps } from './core/player';
+export type { PlayerProps, PlayerRef, CallbackListener, PlayerEventTypes } from './core/player';

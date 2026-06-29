@@ -2,6 +2,7 @@ import { createRoot } from 'react-dom/client';
 import { Player } from '../src';
 import { Demo } from './composition';
 import { ExportDemo } from './export-demo';
+import { PlayerRefDemo } from './player-ref-demo';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('no #root');
@@ -15,5 +16,6 @@ createRoot(root).render(
     </div>
     <Player composition={Demo} width={1080} height={1920} fps={30} durationInFrames={90} displayHeight={620} />
     <ExportDemo />
+    <PlayerRefDemo />
   </div>,
 );
