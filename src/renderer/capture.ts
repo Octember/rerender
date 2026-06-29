@@ -44,6 +44,8 @@ export interface CaptureOptions {
   imageFormat?: 'png' | 'jpeg';
   jpegQuality?: number;
   collectAudio?: boolean;
+  /** called once per captured frame — lets renderMedia report smooth per-frame progress. */
+  onFrame?: () => void;
 }
 
 /** Capture frames [lo, hi) into `dir` as f-NNNNN.{png|jpg} using ONE page of an
@@ -87,6 +89,7 @@ async function captureRange(
       ]);
       renameSync(`${final}.part`, final);
       if (a.length) assets.set(f, a);
+      opts.onFrame?.();
     }
   } finally {
     await page.close();

@@ -13,6 +13,8 @@ export const removerAliases = [
   { find: '@remotion/transitions', replacement: abs('src/transitions/index.ts') },
   { find: '@remotion/media-utils', replacement: abs('src/media-utils/index.ts') },
   { find: '@remotion/media-parser', replacement: abs('src/media-parser/index.ts') },
+  { find: '@remotion/lambda-client', replacement: abs('cloud/lambda-client.ts') },
+  { find: '@remotion/lambda', replacement: abs('cloud/lambda-client.ts') },
   { find: '@remotion/player', replacement: abs('src/core/player.tsx') },
   { find: /^remotion$/, replacement: abs('src/remotion.ts') },
 ];

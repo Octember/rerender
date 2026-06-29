@@ -16,22 +16,58 @@ Parameters:
     Description: MB per worker (more memory = more vCPU = faster per-slice capture).
   Timeout:
     Type: Number
-    Default: 600
-    Description: Max seconds per slice (10 min). Keep slices small enough to fit.
+    Default: 900
+    Description: >
+      Max seconds per invocation (15 min, the Lambda ceiling). In `launch` mode one
+      invocation renders the whole composition, so this bounds the longest render.
   EphemeralStorage:
     Type: Number
     Default: 4096
     Description: /tmp MB — holds one slice's frames + segment.
+  PublicOutputs:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: >
+      When true, rendered objects are publicly readable via their plain S3 URL
+      (https://<bucket>.s3.<region>.amazonaws.com/renders/<id>/out.mp4) — what
+      @remotion/lambda does and what a caller that builds the URL from bucket+renderId
+      expects. Off by default so the bucket stays private unless you opt in.
+
+Conditions:
+  MakeOutputsPublic: !Equals [!Ref PublicOutputs, 'true']
 
 Resources:
   RenderBucket:
     Type: AWS::S3::Bucket
     Properties:
+      # Block public ACLs always; only relax the *policy* gates when PublicOutputs=true,
+      # so the bucket policy below can grant public read.
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: !If [MakeOutputsPublic, false, true]
+        RestrictPublicBuckets: !If [MakeOutputsPublic, false, true]
       LifecycleConfiguration:
         Rules:
           - Id: expire-segments
             Status: Enabled
             ExpirationInDays: 1
+
+  # Public read for rendered outputs, mirroring @remotion/lambda's public bucket. Only
+  # created when PublicOutputs=true; scoped to GetObject so nothing can be written anonymously.
+  RenderBucketPublicReadPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: MakeOutputsPublic
+    Properties:
+      Bucket: !Ref RenderBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: s3:GetObject
+            Resource: !Sub '${RenderBucket.Arn}/*'
 
   WorkerRole:
     Type: AWS::IAM::Role
@@ -66,6 +102,16 @@ Resources:
       Timeout: !Ref Timeout
       EphemeralStorage:
         Size: !Ref EphemeralStorage
+
+  # `launch` is invoked fire-and-forget (InvocationType: Event). AWS retries failed async
+  # invocations twice by default, which would start duplicate renders — the launch handler
+  # catches its own errors into progress.json, so disable retries.
+  WorkerAsyncConfig:
+    Type: AWS::Lambda::EventInvokeConfig
+    Properties:
+      FunctionName: !Ref Worker
+      Qualifier: $LATEST
+      MaximumRetryAttempts: 0
 
 Outputs:
   FunctionName:

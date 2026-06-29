@@ -40,11 +40,19 @@ export async function renderMedia(opts: RenderMediaOptions): Promise<{ buffer: n
   const props = encodeURIComponent(JSON.stringify(opts.inputProps ?? {}));
   const stepUrl = `${serveUrl}/?step=1&comp=${encodeURIComponent(c.id)}&props=${props}`;
   const collectAudio = !opts.muted;
+  // Capture is the long pole, so report progress per captured frame across all parallel
+  // slices (0 → 0.8); encode/concat/mux fill the remainder. Gives a smooth progress bar
+  // for getRenderProgress instead of a frozen-then-jump.
+  let captured = 0;
   const captureOpts: CaptureOptions = {
     scale: opts.scale,
     imageFormat: opts.imageFormat ?? 'png',
     jpegQuality: opts.jpegQuality,
     collectAudio,
+    onFrame: () => {
+      captured++;
+      opts.onProgress?.({ renderedFrames: captured, progress: (captured / totalFrames) * 0.8 });
+    },
   };
   const ext = (opts.imageFormat ?? 'png') === 'jpeg' ? 'jpg' : 'png';
 
@@ -64,7 +72,6 @@ export async function renderMedia(opts: RenderMediaOptions): Promise<{ buffer: n
     //    single browser shares one CDP connection, serializing those commands; N
     //    browsers give N parallel CDP connections and measured ~2x faster.
     const maps = await Promise.all(ranges.map(([a, b]) => captureFrames(exe, stepUrl, a, b, dir, c, captureOpts)));
-    opts.onProgress?.({ renderedFrames: totalFrames, progress: 0.7 });
 
     // 2. Encode each slice in parallel — one WebCodecs+mediabunny encoder per slice over
     //    its own frames (local indices 0..n-1, forced keyframe at 0) → segment-i.mp4.

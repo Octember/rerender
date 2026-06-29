@@ -2,6 +2,7 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "entry": [
     "cloud/handler.mjs",
+    "cloud/lambda-client.ts",
     "render/studio-render-core.tsx",
     "render/studio-main.tsx",
     "render/encode-worker.ts",
