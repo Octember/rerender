@@ -39,6 +39,7 @@
   "dependencies": {
     "@aws-sdk/client-lambda": "^3.1075.0",
     "@aws-sdk/client-s3": "^3.1075.0",
+    "@mediabunny/aac-encoder": "^1.49.0",
     "@puppeteer/browsers": "^3.0.5",
     "@remotion/google-fonts": "^4.0.484",
     "@remotion/zod-types": "^4.0.484",

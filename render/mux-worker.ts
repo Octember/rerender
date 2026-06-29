@@ -2,6 +2,7 @@
 // and served to the mux browser. An OfflineAudioContext sums the asset audio (each
 // scheduled at its timeline position through a gain node); mediabunny packet-copies the
 // silent video and AAC-encodes the mix into one mp4. window.__mux() returns base64.
+import { registerAacEncoder } from '@mediabunny/aac-encoder';
 import {
   AudioBufferSource,
   BufferSource,
@@ -16,6 +17,11 @@ import {
 } from 'mediabunny';
 import type { MuxPosition, VideoCodec } from '../src/renderer/types';
 import { toBase64 } from './worker-util';
+
+// Polyfill AAC encoding (a self-contained WASM build of FFmpeg's AAC encoder) so we get AAC
+// even where WebCodecs lacks it — notably chrome-headless-shell on AWS Lambda, which has no
+// licensed AAC encoder and would otherwise fall back to Opus. Registered once on load.
+registerAacEncoder();
 
 declare global {
   interface Window {
@@ -59,15 +65,14 @@ async function mux(positions: MuxPosition[], fps: number, codec: VideoCodec, sam
   const out = new Output({ format, target: new BufferTarget() });
   const videoSource = new EncodedVideoPacketSource(codec);
   out.addVideoTrack(videoSource, { frameRate: fps });
-  // chrome-headless-shell on AWS Lambda can't encode some AAC configs (the licensed encoder
-  // isn't always present); pick the first codec that's both mp4-compatible AND actually
-  // encodable in this browser — AAC where available, otherwise Opus — instead of hard-failing.
+  // Prefer AAC (what mp4 consumers expect); registerAacEncoder() above makes it always
+  // encodable, but keep the fallback to any other mp4-compatible+encodable codec for safety.
   const audioBitrate = 128_000;
-  const audioCodec = await getFirstEncodableAudioCodec(format.getSupportedAudioCodecs(), {
-    numberOfChannels: 2,
-    sampleRate,
-    bitrate: audioBitrate,
-  });
+  const containerCodecs = format.getSupportedAudioCodecs();
+  const order = containerCodecs.includes('aac')
+    ? (['aac', ...containerCodecs.filter((c) => c !== 'aac')] as typeof containerCodecs)
+    : containerCodecs;
+  const audioCodec = await getFirstEncodableAudioCodec(order, { numberOfChannels: 2, sampleRate, bitrate: audioBitrate });
   if (!audioCodec) throw new Error('mux: no encodable mp4 audio codec available in this browser');
   const audioSource = new AudioBufferSource({ codec: audioCodec, bitrate: audioBitrate });
   out.addAudioTrack(audioSource);
