@@ -22,16 +22,18 @@ declare global {
 
 const raf = (): Promise<void> => new Promise((r) => requestAnimationFrame(() => r()));
 
-// Resolves once React has committed + painted the frame, any delayRender() holds
-// (e.g. async audio decode) have cleared, and every <video> has finished seeking.
-// Fast path (no delays, no <video>) is 2 rAFs — commit then paint — instead of the
-// old fixed 5; the delay loop and video-seek wait only run when actually present.
+// Resolves once React has committed the frame, any delayRender() holds (e.g. async data
+// or an <Img> still loading) have cleared, all fonts are loaded, and every <video> has
+// finished seeking. The fast path (no delays, no fonts pending, no <video>) is cheap.
 async function settle(): Promise<void> {
   // The frame is already committed synchronously (flushSync in __setFrame), and the
   // CDP screenshot rasters the committed DOM — so the fast path needs no rAF at all.
-  // Only genuinely-async work waits: delayRender() holds and <video> seeks.
+  // Only genuinely-async work waits: delayRender() holds, font loads, and <video> seeks.
   let guard = 0;
   while (getPendingDelays() > 0 && guard++ < 600) await raf();
+  // Web/brand fonts: don't screenshot text before its font has loaded (else it renders in
+  // a fallback face). document.fonts.ready re-pends when a new font starts loading.
+  if (typeof document !== 'undefined' && document.fonts) await document.fonts.ready;
   const videos = Array.from(document.querySelectorAll('video'));
   if (videos.length) {
     await Promise.all(

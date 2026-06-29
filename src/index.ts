@@ -12,6 +12,8 @@ export { measureSpring } from './core/measure-spring';
 
 export { staticFile, random } from './core/util';
 export { delayRender, continueRender } from './core/delay-render';
+export { prefetch } from './core/prefetch';
+export type { PrefetchHandle } from './core/prefetch';
 export { getInputProps, getRemotionEnvironment } from './core/env';
 export type { RemotionEnvironment } from './core/env';
 

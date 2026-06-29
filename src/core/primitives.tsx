@@ -1,8 +1,9 @@
 // The primitive vocabulary — real DOM, Remotion-compatible. These are thin wrappers
 // over <div>/<img>/<video>/<audio>, so arbitrary CSS in a composition just works.
-import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useCurrentFrame, useIsPlaying, useTimelinePosition, useVideoConfig } from './frame';
 import { registerRenderAsset } from './assets';
+import { continueRender, delayRender } from './delay-render';
 
 // During render, register a media asset for the audio mix (one entry per frame the
 // element is mounted). No-op in the player.
@@ -45,8 +46,37 @@ export function AbsoluteFill(props: { style?: CSSProperties; children?: ReactNod
   );
 }
 
-export function Img(props: React.ImgHTMLAttributes<HTMLImageElement>): JSX.Element {
-  return <img {...props} />;
+/** An <img> that holds the render until it has loaded — without this the renderer can
+ *  screenshot a frame before the image decodes, producing blank image overlays. */
+export function Img({ onLoad, onError, ...props }: React.ImgHTMLAttributes<HTMLImageElement>): JSX.Element {
+  const ref = useRef<HTMLImageElement>(null);
+  const [handle] = useState(() => delayRender(`<Img>: loading ${String(props.src)}`));
+  const done = useRef(false);
+  const release = useCallback(() => {
+    if (done.current) return;
+    done.current = true;
+    continueRender(handle);
+  }, [handle]);
+  // A cached image can already be complete before onLoad attaches; and always release on
+  // unmount so a never-loaded image can't stall the render forever.
+  useEffect(() => {
+    if (ref.current?.complete && ref.current.naturalWidth > 0) release();
+    return release;
+  }, [release]);
+  return (
+    <img
+      ref={ref}
+      {...props}
+      onLoad={(e) => {
+        release();
+        onLoad?.(e);
+      }}
+      onError={(e) => {
+        release();
+        onError?.(e);
+      }}
+    />
+  );
 }
 
 /** A frame-synced <video>: seeks while scrubbing, plays natively while playing,
