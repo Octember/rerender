@@ -87,7 +87,7 @@ export async function renderMedia(
         writeFileSync(file, Buffer.from(await res.arrayBuffer()));
         local.set(p.src, file);
       }
-      muxAudio(silent, outputLocation, positions.map((p) => ({ ...p, src: local.get(p.src)! })), c.fps);
+      await muxAudio(silent, outputLocation, positions.map((p) => ({ ...p, src: local.get(p.src)! })), c.fps, codec, c.durationInFrames / c.fps);
     } else {
       copyFileSync(silent, outputLocation);
     }

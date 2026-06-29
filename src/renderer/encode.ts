@@ -2,12 +2,11 @@
 // mediabunny, no ffmpeg. chrome-headless-shell (already our capture browser) has a
 // hardware/software h264/hevc/vp9/av1 encoder; mediabunny is the zero-dep muxer.
 //
-// The encoder page is a mediabunny IIFE pre-bundled once with esbuild and served from
-// a plain http server (no Vite — so it starts instantly and doesn't disturb the
-// concurrent capture Vite/browsers). The page FETCHES frames over http and pipelines
-// (decode N+1 while encoding N). Two-phase: startEncoder() loads the page (overlaps
-// capture), encode() runs the WebCodecs pass once frames are on disk.
-import { build } from 'esbuild';
+// The browser side is render/encode-worker.ts (real, type-checked TS), bundled to an
+// IIFE and served from a plain http server (no Vite — instant, doesn't disturb the
+// concurrent capture browsers). The page fetches frames over http and pipelines (decode
+// N+1 while encoding N). Two-phase: startEncoder() loads the page (overlaps capture),
+// encode() runs the WebCodecs pass once frames are on disk.
 import { createServer, type Server } from 'node:http';
 import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -15,59 +14,12 @@ import { fileURLToPath } from 'node:url';
 import { BufferSource, BufferTarget, EncodedPacketSink, EncodedVideoPacketSource, Input, MP4, Mp4OutputFormat, Output } from 'mediabunny';
 import puppeteer from 'puppeteer-core';
 import { RENDER_ARGS } from './capture';
+import type { VideoCodec } from './types';
+import { bundleWorkerHtml } from './worker-bundle';
 
-const REMOVER_ROOT = fileURLToPath(new URL('../../', import.meta.url));
+export type { VideoCodec } from './types';
 
-export type VideoCodec = 'avc' | 'hevc' | 'vp9' | 'av1';
-
-declare global {
-  interface Window {
-    __encode?: (n: number, fps: number, codec: string) => Promise<string>;
-  }
-}
-
-// Source of the encoder page; esbuild inlines mediabunny into an IIFE (mediabunny
-// resolves from REMOVER_ROOT/node_modules). Sets window.__encode + window.__ready.
-const ENCODER_SRC = `
-import { Output, Mp4OutputFormat, BufferTarget, CanvasSource, QUALITY_HIGH } from 'mediabunny';
-const frame = async (i) => createImageBitmap(await (await fetch('/__frame/' + i)).blob());
-window.__encode = async (n, fps, codec) => {
-  let canvas, ctx, out, src;
-  let next = frame(0);
-  for (let i = 0; i < n; i++) {
-    const bmp = await next;
-    if (i + 1 < n) next = frame(i + 1);
-    if (i === 0) {
-      canvas = document.createElement('canvas'); canvas.width = bmp.width; canvas.height = bmp.height;
-      ctx = canvas.getContext('2d', { alpha: false });
-      out = new Output({ format: new Mp4OutputFormat(), target: new BufferTarget() });
-      src = new CanvasSource(canvas, { codec, bitrate: QUALITY_HIGH });
-      out.addVideoTrack(src, { frameRate: fps });
-      await out.start();
-    }
-    ctx.drawImage(bmp, 0, 0); bmp.close();
-    // Local timestamps (restart at 0 per slice) + a forced keyframe on frame 0, so each
-    // segment is independently decodable and concatenates cleanly. swiftshader (software
-    // encoder, per RENDER_ARGS) reliably honors forced keyframes.
-    await src.add(i / fps, 1 / fps, i === 0 ? { keyFrame: true } : undefined);
-  }
-  await out.finalize();
-  const u = new Uint8Array(out.target.buffer);
-  let s = ''; const CH = 0x8000;
-  for (let i = 0; i < u.length; i += CH) s += String.fromCharCode.apply(null, u.subarray(i, i + CH));
-  return btoa(s);
-};
-window.__ready = true;
-`;
-
-let bundledEncoder: string | null = null;
-async function encoderHtml(): Promise<string> {
-  if (!bundledEncoder) {
-    const r = await build({ stdin: { contents: ENCODER_SRC, resolveDir: REMOVER_ROOT, loader: 'js' }, bundle: true, format: 'iife', write: false, logLevel: 'error' });
-    bundledEncoder = r.outputFiles![0]!.text;
-  }
-  return `<!doctype html><html><body><script>${bundledEncoder}</script></body></html>`;
-}
+const ENCODE_WORKER = fileURLToPath(new URL('../../render/encode-worker.ts', import.meta.url));
 
 export interface Encoder {
   /** Run the WebCodecs encode pass over the (now-complete) frames → mp4 at `output`. */
@@ -77,7 +29,7 @@ export interface Encoder {
 
 /** Start the encoder server + browser and load the page (cheap — overlaps capture). */
 export async function startEncoder(opts: { exe: string; frameDir: string; frameFiles: string[] }): Promise<Encoder> {
-  const html = await encoderHtml();
+  const html = await bundleWorkerHtml(ENCODE_WORKER);
   const server: Server = createServer((req, res) => {
     const url = (req.url ?? '/').split('?')[0]!;
     if (url === '/') { res.setHeader('content-type', 'text/html'); res.end(html); return; }

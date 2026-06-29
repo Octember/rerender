@@ -1,3 +1,15 @@
+/** WebCodecs/mediabunny video codec ids used by the in-browser encoder. */
+export type VideoCodec = 'avc' | 'hevc' | 'vp9' | 'av1';
+
+/** One audio asset's placement on the timeline, passed to the in-browser mux worker. */
+export interface MuxPosition {
+  assetIndex: number;
+  startInVideo: number; // composition frame the asset starts at
+  duration: number; // frame count
+  trimLeft: number; // source-media frame at start
+  volume: number;
+}
+
 // VideoConfig — matches @remotion/renderer's resolved composition shape.
 export interface VideoConfig {
   id: string;

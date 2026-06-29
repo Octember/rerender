@@ -1,9 +1,21 @@
 // Audio assembly — turn per-frame collected assets into timeline positions, then mix
-// + mux into the silent video. POC: scalar volume, playbackRate 1. Mirrors
-// @remotion/renderer's calculateAssetPositions + the atrim/adelay/volume → amix pass.
-import { execFileSync } from 'node:child_process';
-import { copyFileSync } from 'node:fs';
+// + mux into the silent video, entirely in the browser (Web Audio + WebCodecs +
+// mediabunny), no ffmpeg. Mirrors @remotion/renderer's calculateAssetPositions and the
+// atrim/adelay/volume → amix pass: each asset becomes a buffer source scheduled at
+// start(when=startInVideo/fps, offset=trimLeft/fps, duration), through a gain node, all
+// summed by an OfflineAudioContext; the mix is AAC-encoded and muxed alongside the
+// (packet-copied) video. POC: scalar volume, playbackRate 1.
+import { createServer, type Server } from 'node:http';
+import { copyFileSync, readFileSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import puppeteer from 'puppeteer-core';
 import type { CollectedAsset } from '../core/assets';
+import { chromeExecutable } from '../../render/browser';
+import { RENDER_ARGS } from './capture';
+import type { MuxPosition, VideoCodec } from './types';
+import { bundleWorkerHtml } from './worker-bundle';
+
+const MUX_WORKER = fileURLToPath(new URL('../../render/mux-worker.ts', import.meta.url));
 
 export interface AssetPosition {
   type: 'audio' | 'video';
@@ -47,30 +59,45 @@ export function calculateAssetPositions(frames: Map<number, CollectedAsset[]>): 
   return positions;
 }
 
-/** Mix the asset audio and mux it into the silent video → output. */
-export function muxAudio(silentVideo: string, output: string, positions: AssetPosition[], fps: number, sampleRate = 44100): void {
+/** Mix the asset audio and mux it into the silent video → output, in the browser. */
+export async function muxAudio(
+  silentVideo: string,
+  output: string,
+  positions: AssetPosition[],
+  fps: number,
+  codec: VideoCodec,
+  videoDurationSec: number,
+  sampleRate = 44100,
+): Promise<void> {
   if (positions.length === 0) {
     copyFileSync(silentVideo, output);
     return;
   }
+  const html = await bundleWorkerHtml(MUX_WORKER);
+  const durationSec = Math.max(videoDurationSec, ...positions.map((p) => (p.startInVideo + p.duration) / fps));
+  const muxPositions: MuxPosition[] = positions.map((p, i) => ({ assetIndex: i, startInVideo: p.startInVideo, duration: p.duration, trimLeft: p.trimLeft, volume: p.volume }));
 
-  const inputs = ['-i', silentVideo];
-  positions.forEach((p) => inputs.push('-i', p.src));
-
-  const filters = positions.map((p, i) => {
-    const trimStart = p.trimLeft / fps;
-    const trimDur = p.duration / fps;
-    const delayMs = Math.round((p.startInVideo / fps) * 1000);
-    return `[${i + 1}:a]atrim=start=${trimStart.toFixed(6)}:duration=${trimDur.toFixed(6)},asetpts=PTS-STARTPTS,adelay=${delayMs}|${delayMs},volume=${p.volume}[a${i}]`;
+  const server: Server = createServer((req, res) => {
+    const url = (req.url ?? '/').split('?')[0]!;
+    if (url === '/') { res.setHeader('content-type', 'text/html'); res.end(html); return; }
+    if (url === '/__silent') { res.setHeader('content-type', 'video/mp4'); res.end(readFileSync(silentVideo)); return; }
+    const m = url.match(/^\/__asset\/(\d+)$/);
+    if (m && positions[Number(m[1])]) { res.end(readFileSync(positions[Number(m[1])]!.src)); return; }
+    res.statusCode = 404;
+    res.end();
   });
-  const mixInputs = positions.map((_, i) => `[a${i}]`).join('');
-  filters.push(`${mixInputs}amix=inputs=${positions.length}:normalize=0[aout]`);
-
-  // -shortest would clip the video to the audio length; keep the full video and let
-  // the audio stream end naturally (silence after).
-  execFileSync(
-    'ffmpeg',
-    ['-y', ...inputs, '-filter_complex', filters.join(';'), '-map', '0:v', '-map', '[aout]', '-c:v', 'copy', '-c:a', 'aac', '-ar', String(sampleRate), '-movflags', '+faststart', output],
-    { stdio: 'ignore' },
-  );
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = (server.address() as { port: number }).port;
+  const browser = await puppeteer.launch({ executablePath: await chromeExecutable(), headless: 'shell', args: RENDER_ARGS });
+  try {
+    const page = await browser.newPage();
+    page.on('pageerror', (e) => console.error('[muxAudio]', String(e).slice(0, 200)));
+    await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'load' });
+    await page.waitForFunction(() => window.__ready === true, { timeout: 30_000 });
+    const b64 = await page.evaluate((p, f, c, sr, d) => window.__mux!(p, f, c, sr, d), muxPositions, fps, codec, sampleRate, durationSec);
+    writeFileSync(output, Buffer.from(b64, 'base64'));
+  } finally {
+    await browser.close();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
 }
