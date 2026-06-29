@@ -1,7 +1,6 @@
-// The frame-step capture engine, shared by the compat harness (render/render.ts)
-// and the renderer (renderMedia/renderStill). Drives window.__setFrame(f) in
-// chrome-headless-shell and screenshots each frame; recorded-frame N ==
-// composition-frame N by construction. The browser flags mirror Remotion's so
+// The frame-step capture engine used by the renderer (renderMedia/renderStill). Drives
+// window.__setFrame(f) in chrome-headless-shell and screenshots each frame; captured-frame
+// N == composition-frame N by construction. The browser flags mirror Remotion's so
 // transformed/curved layers anti-alias identically.
 import puppeteer, { type Browser } from 'puppeteer-core';
 import { renameSync } from 'node:fs';
@@ -9,7 +8,7 @@ import { join } from 'node:path';
 import type { StageConfig } from '../../render/stage';
 import type { CollectedAsset } from '../core/assets';
 
-export const RENDER_ARGS = [
+const RENDER_ARGS = [
   '--no-sandbox',
   '--disable-setuid-sandbox',
   '--no-first-run',
@@ -40,21 +39,6 @@ export function launchBrowser(executablePath: string): Promise<Browser> {
   return puppeteer.launch({ executablePath, headless: 'shell', args, pipe: lambda });
 }
 
-/** Read the composition's config (dims/fps/duration) from the render page itself. */
-export async function readConfig(executablePath: string, stepUrl: string): Promise<StageConfig> {
-  const browser = await launchBrowser(executablePath);
-  try {
-    const page = await browser.newPage();
-    await page.goto(stepUrl, { waitUntil: 'load' });
-    await page.waitForFunction(() => window.__ready === true, { timeout: 60_000 });
-    const cfg = await page.evaluate(() => window.__config);
-    if (!cfg) throw new Error('render page did not expose window.__config');
-    return cfg;
-  } finally {
-    await browser.close();
-  }
-}
-
 export interface CaptureOptions {
   scale?: number;
   imageFormat?: 'png' | 'jpeg';
@@ -65,7 +49,7 @@ export interface CaptureOptions {
 /** Capture frames [lo, hi) into `dir` as f-NNNNN.{png|jpg} using ONE page of an
  *  already-launched browser; returns the media assets registered at each frame (for the
  *  audio mix) when collectAudio is set. */
-export async function captureRange(
+async function captureRange(
   browser: Browser,
   stepUrl: string,
   lo: number,

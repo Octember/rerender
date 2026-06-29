@@ -35,7 +35,7 @@ export interface OrchestrateOptions {
 }
 
 /** Split [0, durationInFrames) into `workers` contiguous inclusive ranges. */
-export function planSlices(durationInFrames: number, workers: number): [number, number][] {
+function planSlices(durationInFrames: number, workers: number): [number, number][] {
   const per = Math.ceil(durationInFrames / workers);
   return Array.from({ length: workers }, (_, i) => [i * per, Math.min((i + 1) * per, durationInFrames) - 1] as [number, number]).filter(
     ([a, b]) => a <= b,
@@ -64,32 +64,4 @@ export async function orchestrateRender(opts: OrchestrateOptions): Promise<{ sli
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-}
-
-/** Dev/test invoker: run the worker as a local subprocess (`remover render --frames …`).
- *  Stands in for a firecracker VM / Lambda without any cloud. */
-export function localInvoker(entry: string): Invoker {
-  return async (job, localSegmentPath) => {
-    const { spawn } = await import('node:child_process');
-    const binUrl = new URL('../bin/remover.mjs', import.meta.url);
-    const { fileURLToPath } = await import('node:url');
-    const bin = fileURLToPath(binUrl);
-    const args = [
-      bin,
-      'render',
-      entry,
-      job.comp,
-      '--frames',
-      `${job.frameRange[0]}-${job.frameRange[1]}`,
-      '--muted',
-      '--output',
-      localSegmentPath,
-    ];
-    if (Object.keys(job.props).length) args.push('--props', JSON.stringify(job.props));
-    await new Promise<void>((resolve, reject) => {
-      const p = spawn(process.execPath, args, { stdio: 'ignore' });
-      p.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`worker ${job.index} exited ${code}`))));
-      p.on('error', reject);
-    });
-  };
 }

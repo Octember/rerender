@@ -3,7 +3,7 @@
 // render page that imports the entry (firing registerRoot) and boots the studio.
 // remover's `remotion`/`@remotion/*` aliases are applied, so the user's project
 // resolves to remover exactly as the dev server does.
-import { createServer, type ViteDevServer } from 'vite';
+import { createServer } from 'vite';
 import react from '@vitejs/plugin-react';
 import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,10 +14,7 @@ const STUDIO_CORE = fileURLToPath(new URL('../../render/studio-render-core.tsx',
 
 export interface RemoverBundle {
   serveUrl: string;
-  /** Set the inputProps injected into the next page load (window.__removerInputProps). */
-  setProps: (props: Record<string, unknown>) => void;
   close: () => Promise<void>;
-  server: ViteDevServer;
 }
 
 export async function bundle(entryPoint: string, options: { port?: number } = {}): Promise<RemoverBundle> {
@@ -25,12 +22,13 @@ export async function bundle(entryPoint: string, options: { port?: number } = {}
   // Serve from the project root (parent of src/) so public/ assets resolve like Remotion.
   let userRoot = dirname(entry);
   if (basename(userRoot) === 'src') userRoot = dirname(userRoot);
-  let props: Record<string, unknown> = {};
 
+  // inputProps are threaded per-render via the ?props= query (see render-media/cli), so the
+  // page just needs a default; props never vary for a given bundle.
   const renderPage = (): string =>
     `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;background:#000;overflow:hidden}</style></head>` +
     `<body><div id="stage"></div>` +
-    `<script>window.__removerInputProps=${JSON.stringify(props)};window.__removerEnv='rendering';</script>` +
+    `<script>window.__removerInputProps={};window.__removerEnv='rendering';</script>` +
     `<script type="module">import ${JSON.stringify('/@fs/' + entry)};` +
     `import { bootStudio } from ${JSON.stringify('/@fs/' + STUDIO_CORE)};bootStudio();</script>` +
     `</body></html>`;
@@ -82,10 +80,6 @@ export async function bundle(entryPoint: string, options: { port?: number } = {}
 
   return {
     serveUrl,
-    setProps: (p) => {
-      props = p;
-    },
     close: () => server.close(),
-    server,
   };
 }

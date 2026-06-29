@@ -1,7 +1,7 @@
 // AWS invoker — drives the deployed Lambda. For each slice it invokes the function
 // (which renders the segment to S3) and downloads the segment locally so the
-// coordinator can concat. Swap this for localInvoker (orchestrate.ts) to run the exact
-// same orchestration with no cloud.
+// coordinator (orchestrateRender) can concat. The Invoker seam keeps this swappable —
+// e.g. a firecracker/local backend could implement the same interface.
 import { writeFileSync } from 'node:fs';
 import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
 import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';

@@ -66,9 +66,6 @@ Resources:
       Timeout: !Ref Timeout
       EphemeralStorage:
         Size: !Ref EphemeralStorage
-      Environment:
-        Variables:
-          REMOVER_BUCKET: !Ref RenderBucket
 
 Outputs:
   FunctionName:

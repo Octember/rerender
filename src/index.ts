@@ -1,16 +1,5 @@
 // remover — public API (the drop-in Remotion surface).
-export {
-  useCurrentFrame,
-  useVideoConfig,
-  useIsPlaying,
-  Sequence,
-  Series,
-  Freeze,
-  Loop,
-  FrameContext,
-  ConfigContext,
-  PlayingContext,
-} from './core/frame';
+export { useCurrentFrame, useVideoConfig, useIsPlaying, Sequence, Series, Freeze, Loop } from './core/frame';
 export type { VideoConfig } from './core/frame';
 
 export { interpolate, Easing } from './core/interpolate';

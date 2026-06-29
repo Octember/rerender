@@ -1,15 +1,17 @@
-// Shared render stage — drives a single composition for capture, in two modes:
-//   realtime — plays from→to via rAF (Playwright recordVideo captures it).
-//   step     — paused; Playwright drives window.__setFrame(f) per frame, so
-//              recorded-frame N == composition-frame N exactly.
-// Used by both the examples render page and the studio (registered-Root) page.
+// Shared render stage — drives a single composition in two modes:
+//   step     — paused; the renderer drives window.__setFrame(f) per frame over CDP, so
+//              captured-frame N == composition-frame N exactly. This is the render path.
+//   realtime — plays from→to via rAF; the studio's in-browser preview uses this.
+// Used by the examples render page and the studio (registered-Root) page.
 import { useEffect, useState, type ComponentType } from 'react';
 import { flushSync } from 'react-dom';
 import { ConfigContext, FrameContext, PlayingContext, TimelineContext } from '../src/core/frame';
 import { getPendingDelays } from '../src/core/delay-render';
 import { injectRemoverCSS } from '../src/core/default-css';
 
+// Module-load side effects (this module only ever executes in the render/studio browser):
 injectRemoverCSS(); // match Remotion's global reset (box-sizing: border-box)
+if (typeof window !== 'undefined') window.__removerEnv = 'rendering';
 
 export interface StageConfig {
   width: number;
@@ -20,10 +22,8 @@ export interface StageConfig {
 
 declare global {
   interface Window {
-    __renderDone?: boolean;
     __ready?: boolean;
     __setFrame?: (f: number) => Promise<void>;
-    __config?: StageConfig;
   }
 }
 
@@ -94,7 +94,6 @@ function RealtimeStage({ Component, props, config, from, to }: Omit<StageProps, 
       const f = from + Math.floor(((performance.now() - t0) / 1000) * config.fps);
       if (f >= to) {
         setFrame(to - 1);
-        window.__renderDone = true;
         return;
       }
       setFrame(f);
@@ -120,10 +119,6 @@ function StepStage({ Component, props, config, from }: Omit<StageProps, 'stepMod
 }
 
 export function Stage({ Component, props, config, from, to, stepMode }: StageProps): JSX.Element {
-  if (typeof window !== 'undefined') {
-    window.__removerEnv = 'rendering';
-    window.__config = config;
-  }
   return stepMode ? (
     <StepStage Component={Component} props={props} config={config} from={from} />
   ) : (

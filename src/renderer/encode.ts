@@ -130,20 +130,3 @@ export async function concatSegments(segmentPaths: string[], codec: VideoCodec, 
   if (!target.buffer) throw new Error('concatSegments: muxer produced no output');
   writeFileSync(output, Buffer.from(target.buffer));
 }
-
-/** One-shot convenience: start, encode, close. */
-export async function encodeFramesToMp4(opts: {
-  exe: string;
-  frameDir: string;
-  frameFiles: string[];
-  fps: number;
-  codec?: VideoCodec;
-  output: string;
-}): Promise<void> {
-  const enc = await startEncoder(opts);
-  try {
-    await enc.encode(opts.output, opts.fps, opts.codec ?? 'avc', opts.frameFiles.length);
-  } finally {
-    await enc.close();
-  }
-}
