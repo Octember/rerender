@@ -8,12 +8,14 @@
 FROM public.ecr.aws/lambda/nodejs:20
 
 # unzip/tar/findutils for the chrome-headless-shell download + chrome's shared
-# libraries (Amazon Linux 2023). The base image is minimal — no unzip, no find.
+# libraries (Amazon Linux 2023). The base image is minimal — no unzip, no find. Fonts
+# too: the base ships none, so any text (incl. `system-ui`) renders in a poor fallback.
 RUN dnf install -y \
       unzip tar findutils \
       nss nspr atk at-spi2-atk at-spi2-core cups-libs libdrm libgbm mesa-libgbm \
       libxkbcommon libXcomposite libXdamage libXfixes libXrandr libXScrnSaver \
       alsa-lib pango cairo gtk3 \
+      dejavu-sans-fonts dejavu-serif-fonts liberation-fonts google-noto-sans-fonts google-noto-emoji-fonts \
     && dnf clean all
 
 WORKDIR ${LAMBDA_TASK_ROOT}
