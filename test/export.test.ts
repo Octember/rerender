@@ -91,7 +91,7 @@ async function main(): Promise<void> {
     // pause + seek to a fixed time so the pixel probe is deterministic (not wherever loop is).
     try {
       await page.waitForFunction(() => Array.from(document.querySelectorAll('video')).some((v) => v.src.startsWith('blob:')), {
-        timeout: 200_000, // the showcase comp is 210 frames; software-raster CI is slow
+        timeout: 420_000, // the showcase comp is ~760 frames now; software-raster CI is slow
         polling: 500,
       });
     } catch {
@@ -105,7 +105,7 @@ async function main(): Promise<void> {
     const probe = (await page.evaluate(async () => {
       const v = Array.from(document.querySelectorAll('video')).find((x) => x.src.startsWith('blob:')) as HTMLVideoElement;
       v.pause();
-      v.currentTime = 6.9; // the footage fills the frame only in the final act (it grows out of the hero card)
+      v.currentTime = v.duration * 0.93; // footage fills the frame only in the final act — sample there, whatever the comp's length
       await new Promise<void>((res) => {
         v.onseeked = () => res(undefined);
       });

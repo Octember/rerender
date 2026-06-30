@@ -7,12 +7,12 @@
 import { type ComponentType, type CSSProperties, useEffect, useRef, useState } from 'react';
 import { Player, type PlayerRef } from '../src';
 import { exportToMp4 } from '../src/client/export';
-import { CodeToFilm } from './code-to-film';
+import { CodeToFilm, CODE_TO_FILM_DURATION } from './code-to-film';
 
 const W = 1280;
 const H = 720;
 const FPS = 30;
-const DUR = 240;
+const DUR = CODE_TO_FILM_DURATION; // single source of truth — the comp owns its own length
 const ACCENT = '#ff5e8a';
 const DISPLAY_W = 468;
 const DISPLAY_H = Math.round((DISPLAY_W * H) / W); // whole px → integer container box, one fewer fractional snap
@@ -319,10 +319,8 @@ function VsTable(): JSX.Element {
   );
 }
 
-const GAP = 20;
-
-/** Responsive split: two cards side by side on wide screens, stacked + scaled to fit on mobile. */
-function useCardLayout(): { ref: React.RefObject<HTMLDivElement>; cardW: number; displayH: number } {
+/** The hero plays huge at the full content width; the exported file previews small underneath it. */
+function useHeroLayout(): { ref: React.RefObject<HTMLDivElement>; heroW: number; heroH: number; smallW: number; smallH: number } {
   const ref = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(0);
   useEffect(() => {
@@ -334,19 +332,20 @@ function useCardLayout(): { ref: React.RefObject<HTMLDivElement>; cardW: number;
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const stacked = w > 0 && w < 620; // two readable cards no longer fit side by side
-  const cardW = w === 0 ? DISPLAY_W : Math.min(DISPLAY_W, stacked ? w : (w - GAP) / 2);
-  return { ref, cardW, displayH: Math.round((cardW * H) / W) };
+  const heroW = w === 0 ? DISPLAY_W * 2 : w; // the hero fills the whole column
+  const smallW = Math.min(heroW, 384); // the exported file rides underneath, deliberately small
+  return { ref, heroW, heroH: Math.round((heroW * H) / W), smallW, smallH: Math.round((smallW * H) / W) };
 }
 
 export function ExportShowcase(): JSX.Element {
-  const { ref: splitRef, cardW, displayH } = useCardLayout();
+  const { ref: containerRef, heroW, heroH, smallW, smallH } = useHeroLayout();
   const [status, setStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
   const [pct, setPct] = useState(0);
   const [frameNo, setFrameNo] = useState(0);
   const [strip, setStrip] = useState<string[]>([]);
   const [url, setUrl] = useState<string | null>(null);
   const [meta, setMeta] = useState<{ secs: string; size: string } | null>(null);
+  const [downloaded, setDownloaded] = useState(false);
   const [err, setErr] = useState('');
   const liveCanvas = useRef<HTMLCanvasElement>(null);
   const player = useRef<PlayerRef>(null);
@@ -367,6 +366,7 @@ export function ExportShowcase(): JSX.Element {
     setFrameNo(0);
     setStrip([]);
     setUrl(null);
+    setDownloaded(false);
     setErr('');
     const thumbs: string[] = [];
     const t0 = performance.now();
@@ -392,9 +392,18 @@ export function ExportShowcase(): JSX.Element {
           }
         },
       });
-      setUrl(URL.createObjectURL(blob));
+      const objectUrl = URL.createObjectURL(blob);
+      setUrl(objectUrl);
       setMeta({ secs: ((performance.now() - t0) / 1000).toFixed(1), size: (blob.size / 1024).toFixed(0) });
       setStatus('done');
+      // the whole point of the demo: it just lands in your downloads, no server round-trip
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = 'rerender-export.mp4';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setDownloaded(true);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
       setStatus('error');
@@ -402,93 +411,28 @@ export function ExportShowcase(): JSX.Element {
   }
 
   return (
-    <div>
-      {/* the split: live composition ↔ the exported file */}
-      <div ref={splitRef} style={{ display: 'flex', gap: GAP, flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'center' }}>
-        <div style={{ ...card, width: cardW }}>
-          <div style={cardLabel}>
-            <span>● LIVE · REACT COMPOSITION</span>
-            <span style={{ color: ACCENT }}>useCurrentFrame()</span>
-          </div>
-          <Player
-            ref={player}
-            composition={CodeToFilm}
-            width={W}
-            height={H}
-            fps={FPS}
-            durationInFrames={DUR}
-            displayHeight={displayH}
-            controls={false}
-            style={{ display: 'block' }}
-          />
+    <div ref={containerRef}>
+      {/* THE HERO — the live React composition, playing huge */}
+      <div style={{ ...card, width: heroW }}>
+        <div style={cardLabel}>
+          <span>● LIVE · REACT COMPOSITION</span>
+          <span style={{ color: ACCENT }}>useCurrentFrame()</span>
         </div>
-
-        <div style={{ ...card, width: cardW }}>
-          <div style={cardLabel}>
-            <span style={{ color: status === 'done' ? '#7fdca0' : '#8a8a99' }}>
-              {status === 'done' ? '▸ THE .MP4 · DECODED BY YOUR BROWSER' : 'OUTPUT · .MP4'}
-            </span>
-            <span>{status === 'running' ? `${pct}%` : status === 'done' ? `${meta?.size} KB` : ''}</span>
-          </div>
-          <div
-            style={{
-              width: cardW,
-              height: displayH,
-              background: '#000',
-              position: 'relative',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            {status === 'idle' && (
-              <div style={{ color: '#55555f', fontSize: 14, textAlign: 'center', padding: 20, lineHeight: 1.6 }}>
-                hit <b style={{ color: ACCENT }}>Export</b> →<br />
-                the .mp4 is built right here, in this tab
-              </div>
-            )}
-            {status === 'running' && (
-              <>
-                <canvas ref={liveCanvas} width={DISPLAY_W} height={DISPLAY_H} style={{ width: '100%', height: '100%', display: 'block' }} />
-                <div
-                  style={{
-                    position: 'absolute',
-                    inset: 0,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'flex-end',
-                    paddingBottom: 16,
-                    background: 'linear-gradient(to top, rgba(0,0,0,0.6), transparent 40%)',
-                  }}
-                >
-                  <div style={{ fontFamily: 'ui-monospace, monospace', fontSize: 13, color: '#fff', marginBottom: 8 }}>
-                    capturing frame {frameNo} / {DUR}
-                  </div>
-                  <div style={{ width: '82%', height: 5, background: 'rgba(255,255,255,0.15)', borderRadius: 999, overflow: 'hidden' }}>
-                    <div style={{ width: `${pct}%`, height: '100%', background: `linear-gradient(90deg,${ACCENT},#ffa14a)` }} />
-                  </div>
-                </div>
-              </>
-            )}
-            {status === 'done' && url && (
-              // biome-ignore lint/a11y/useMediaCaption: a generated demo clip, no captions
-              <video
-                src={url}
-                autoPlay
-                loop
-                muted
-                playsInline
-                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-              />
-            )}
-            {status === 'error' && <div style={{ color: '#ff6b6b', fontSize: 13, padding: 20 }}>✗ {err}</div>}
-          </div>
-        </div>
+        <Player
+          ref={player}
+          composition={CodeToFilm}
+          width={W}
+          height={H}
+          fps={FPS}
+          durationInFrames={DUR}
+          displayHeight={heroH}
+          controls={false}
+          style={{ display: 'block' }}
+        />
       </div>
 
-      {/* export CTA + the headline render-time stat + big download */}
-      <div style={{ marginTop: 22, display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
+      {/* export CTA + the headline render-time stat */}
+      <div style={{ marginTop: 22, display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap' }}>
         <button
           type="button"
           onClick={run}
@@ -521,29 +465,92 @@ export function ExportShowcase(): JSX.Element {
         )}
       </div>
 
-      {status === 'done' && meta && url && (
-        <div style={{ marginTop: 18, display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
-          <a
-            href={url}
-            download="rerender-export.mp4"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 10,
-              background: '#16161d',
-              color: '#fff',
-              border: `1.5px solid ${ACCENT}`,
-              borderRadius: 12,
-              padding: '14px 26px',
-              fontSize: 16,
-              fontWeight: 700,
-            }}
-          >
-            <span style={{ fontSize: 18 }}>⬇</span> Download the .mp4
-          </a>
-          <Badge icon="🎞">{DUR} frames</Badge>
-          <Badge icon="🖥">no server</Badge>
-          <Badge icon="🚫">no ffmpeg</Badge>
+      {/* THE EXPORTED FILE — smaller, riding underneath the hero */}
+      {status !== 'idle' && (
+        <div style={{ marginTop: 18, display: 'flex', gap: 18, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          <div style={{ ...card, width: smallW }}>
+            <div style={cardLabel}>
+              <span style={{ color: status === 'done' ? '#7fdca0' : '#8a8a99' }}>
+                {status === 'done' ? '▸ THE .MP4 · DECODED BY YOUR BROWSER' : 'OUTPUT · .MP4'}
+              </span>
+              <span>{status === 'running' ? `${pct}%` : status === 'done' ? `${meta?.size} KB` : ''}</span>
+            </div>
+            <div
+              style={{
+                width: smallW,
+                height: smallH,
+                background: '#000',
+                position: 'relative',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              {status === 'running' && (
+                <>
+                  <canvas ref={liveCanvas} width={DISPLAY_W} height={DISPLAY_H} style={{ width: '100%', height: '100%', display: 'block' }} />
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'flex-end',
+                      paddingBottom: 12,
+                      background: 'linear-gradient(to top, rgba(0,0,0,0.6), transparent 40%)',
+                    }}
+                  >
+                    <div style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12, color: '#fff', marginBottom: 7 }}>
+                      capturing frame {frameNo} / {DUR}
+                    </div>
+                    <div style={{ width: '82%', height: 5, background: 'rgba(255,255,255,0.15)', borderRadius: 999, overflow: 'hidden' }}>
+                      <div style={{ width: `${pct}%`, height: '100%', background: `linear-gradient(90deg,${ACCENT},#ffa14a)` }} />
+                    </div>
+                  </div>
+                </>
+              )}
+              {status === 'done' && url && (
+                // biome-ignore lint/a11y/useMediaCaption: a generated demo clip, no captions
+                <video src={url} autoPlay loop muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+              )}
+              {status === 'error' && <div style={{ color: '#ff6b6b', fontSize: 13, padding: 20 }}>✗ {err}</div>}
+            </div>
+          </div>
+
+          {status === 'done' && url && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-start', paddingTop: 4 }}>
+              {downloaded && (
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: '#7fdca0', fontSize: 14, fontWeight: 600 }}>
+                  <span style={{ fontSize: 16 }}>✓</span> Saved to your downloads —{' '}
+                  <code style={{ fontFamily: 'ui-monospace, monospace' }}>rerender-export.mp4</code>
+                </div>
+              )}
+              <a
+                href={url}
+                download="rerender-export.mp4"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  background: '#16161d',
+                  color: '#fff',
+                  border: `1.5px solid ${ACCENT}`,
+                  borderRadius: 12,
+                  padding: '12px 22px',
+                  fontSize: 15,
+                  fontWeight: 700,
+                }}
+              >
+                <span style={{ fontSize: 18 }}>⬇</span> Download again
+              </a>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <Badge icon="🎞">{DUR} frames</Badge>
+                <Badge icon="🖥">no server</Badge>
+                <Badge icon="🚫">no ffmpeg</Badge>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
