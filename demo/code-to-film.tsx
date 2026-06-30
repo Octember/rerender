@@ -132,7 +132,10 @@ export function CodeToFilm(): JSX.Element {
   // reveal's motion rather than "everything stops, then the title suddenly snaps in"
   const tSpring = (d: number): number => Math.max(0, spring({ frame: frame - d, fps, config: { damping: 17, stiffness: 110 } }));
   const t1 = tSpring(T.film + 6);
-  const t3 = seg(T.film + 30, T.film + 46);
+  // derived from t1 (not a separate seg() on its own clock) so the subtitle rides the SAME spring
+  // as the title instead of starting its own flat opacity fade right as the title lands — two
+  // different motion styles back to back (springy, then linear) read as a jolt; this is one beat.
+  const t3 = interpolate(t1, [0.55, 1], [0, 1], clamp);
   const flash = seg(T.grow + 14, T.grow + 24, 0, 0.92) * seg(T.grow + 24, T.grow + 56, 1, 0); // bloom-burst as the card opens into the film
   // the title holds fully settled, then the whole scene fades to black over the final 24 frames —
   // so the loop's jump back to frame 0 (also near-black) reads as a clean cut, not a jarring one
@@ -415,11 +418,27 @@ export function CodeToFilm(): JSX.Element {
                 opacity: t1,
                 transform: `translateY(${interpolate(t1, [0, 1], [30, 0])}px) scale(${interpolate(t1, [0, 1], [0.94, 1])})`,
                 textShadow: '0 10px 50px rgba(255,94,138,0.45), 0 4px 20px rgba(0,0,0,0.6)',
+                // keeps this on its own GPU layer for the title's whole lifetime, so the heavy
+                // blurred text-shadow is rasterized once and the spring's scale/translate is a cheap
+                // GPU transform of that layer — without this, the browser re-rasterizes the shadow
+                // on every animating frame, then can demote the layer right as the spring settles to
+                // a static value, which reads as a glitch/repaint right after the title lands.
+                willChange: 'transform, opacity',
               }}
             >
               This is a React component.
             </div>
-            <div style={{ marginTop: 18, fontFamily: MONO, fontSize: 15, color: 'rgba(255,255,255,0.66)', letterSpacing: 1, opacity: t3 }}>
+            <div
+              style={{
+                marginTop: 18,
+                fontFamily: MONO,
+                fontSize: 15,
+                color: 'rgba(255,255,255,0.66)',
+                letterSpacing: 1,
+                opacity: t3,
+                willChange: 'opacity',
+              }}
+            >
               in your browser · no server · no ffmpeg
             </div>
           </div>
