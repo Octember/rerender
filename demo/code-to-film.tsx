@@ -123,8 +123,10 @@ export function CodeToFilm(): JSX.Element {
   const t2 = tSpring(T.film + 22);
   const t3 = seg(T.film + 36, T.film + 52);
   const flash = seg(T.grow + 6, T.grow + 13, 0, 0.92) * seg(T.grow + 13, T.grow + 32, 1, 0); // bloom-burst as the card opens into the film
-  // a slow, steady push on the whole scene — no hand-held drift; the build must read rock-still
-  const camZoom = 1.025 + seg(0, T.grow - 2, 0, 0.012);
+  // a FIXED overscan — deliberately NOT animated. An ancestor scale that changes every frame forces
+  // every glyph beneath it to re-rasterize and snap to the pixel grid each frame, which reads as Y
+  // jitter on the type. The drift that needed a moving zoom is gone, so this stays constant.
+  const camZoom = 1.025;
 
   return (
     <AbsoluteFill style={{ fontFamily: SANS, overflow: 'hidden' }}>
