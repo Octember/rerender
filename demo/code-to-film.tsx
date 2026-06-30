@@ -1,28 +1,40 @@
-// "It was <div>s the whole time." The showcase composition that makes the point people miss:
-// this is plain HTML/CSS/React — and it renders to a full video. The arc: bare inline-styled
-// <div>s appear WITH their literal CSS shown as code → they spring into motion → the <Video>
-// bursts in as the base layer → grade/orbs/type compound into a cinematic frame → a title lands
-// the thesis. Every visual is real DOM; the footage is the only <Video>, kept as the bottom
-// layer so the in-browser export composites it correctly (the lib de-overlays it so it's smooth).
+// "You already know this." Start from the most familiar thing on the web — a div with a border —
+// and add ONE CSS property at a time (border-radius → rotate → box-shadow → gradient), each line
+// appearing in the source AND visibly transforming the square live. Then it comes alive, the
+// <Video> bursts in, and it compounds into a full film: the point being that the polished video
+// is the same DOM + CSS you were just reading. Every visual is real DOM; the footage is the one
+// <Video>, kept bottom-layer so the in-browser export composites it (and the lib de-overlays it).
 import { AbsoluteFill, Video, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig } from '../src';
 
 const SANS = 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif';
 const MONO = 'ui-monospace, "SF Mono", Menlo, monospace';
-// one-color-per-token, like an editor
-const C = { plain: '#9aa4b2', str: '#98c379', tag: '#e06c75', prop: '#d19a66', punc: '#5c6370' };
+const STR = '#98c379';
 
-/** A line of code with single-quoted strings highlighted — so the captions read like real source. */
-function CodeLine({ text, size = 13 }: { text: string; size?: number }): JSX.Element {
-  const parts = text.split(/('[^']*')/g);
+// the source builds up line by line; each line maps to a property that transforms the square
+const LINES: { f: number; t: string }[] = [
+  { f: 6, t: '<div style={{' },
+  { f: 20, t: '  width: 200, height: 200,' },
+  { f: 26, t: "  border: '3px solid #ff5e8a'," },
+  { f: 44, t: '  borderRadius: 32,' },
+  { f: 62, t: "  transform: 'rotate(-12deg)'," },
+  { f: 80, t: "  boxShadow: '0 30px 80px #ff5e8a66'," },
+  { f: 98, t: "  background: 'linear-gradient(135deg," },
+  { f: 102, t: "    #ff5e8a, #ffb24a)'," },
+  { f: 116, t: '}} />' },
+];
+
+function CodeLine({ text }: { text: string }): JSX.Element {
   return (
-    <div style={{ fontFamily: MONO, fontSize: size, lineHeight: 1.5, color: C.plain, whiteSpace: 'pre' }}>
-      {parts.map((p, i) => (
-        <span key={`${p}-${i}`} style={p.startsWith("'") ? { color: C.str } : undefined}>
-          {p}
-        </span>
-      ))}
-    </div>
+    <div style={{ fontFamily: MONO, fontSize: 17, lineHeight: 1.6, color: '#9aa4b2', whiteSpace: 'pre' }}>{highlightStrings(text)}</div>
   );
+}
+
+function highlightStrings(text: string): JSX.Element[] {
+  return text.split(/('[^']*')/g).map((p, i) => (
+    <span key={`${p}-${i}`} style={p.startsWith("'") ? { color: STR } : undefined}>
+      {p}
+    </span>
+  ));
 }
 
 export function CodeToFilm(): JSX.Element {
@@ -33,184 +45,149 @@ export function CodeToFilm(): JSX.Element {
   const clamp = { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' } as const;
   const key = (pts: number[], vals: number[]): number => interpolate(frame, pts, vals, clamp);
   const seg = (a: number, b: number, from = 0, to = 1): number => interpolate(frame, [a, b], [from, to], clamp);
-  const pop = (d: number): number => spring({ frame: frame - d, fps, config: { damping: 13, stiffness: 110 } });
 
-  // ── the footage: the only <Video>. Bursts in (scale 0→1) at the "video comes in" beat, then a
-  //    slow Ken Burns push. Wrapper carries the scale; it's the FIRST child = bottom layer. ──
-  const vIn = Math.max(0, spring({ frame: frame - 104, fps, config: { damping: 16, stiffness: 85 } }));
-  const ken = key([150, last], [1, 1.12]);
-  const vScale = vIn * ken;
+  // ── the hero square, built one property at a time ──
+  const sqScale = Math.max(0, spring({ frame: frame - 18, fps, config: { damping: 14, stiffness: 120 } }));
+  const borderA = seg(22, 32); // border draws on
+  const br = key([44, 60], [2, 32]); // corners round
+  const rot = key([62, 80], [0, -12]) + key([150, last], [0, -8]); // tilts, then drifts in the film
+  const shadow = seg(80, 96); // shadow blooms
+  const bgFade = seg(98, 120); // gradient fills in
+  // build done ~f120 → it comes alive (grows) → drifts to a corner as the film takes over
+  const sqX = key([120, 158], [900, 196]);
+  const sqY = key([120, 158], [360, 168]);
+  const sqGrow = key([120, 140, 158], [1, 1.18, 0.62]);
+  const sqOpacity = key([150, 170], [1, 0.9]);
 
-  const gradeHue = key([120, last], [330, 270]);
+  const codeOp = seg(8, 18) * seg(126, 146, 1, 0); // panel fades once the square is built
+  const codeX = key([126, 150], [0, -70]);
 
-  // ── the three primitive cards: home (P1) → drift+grow (P2) → integrate as accents (P3/P4) ──
-  // SQUARE → translucent corner accent
-  const sq = {
-    x: key([6, 55, 150], [400, 320, 168]),
-    y: key([6, 55, 150], [252, 210, 150]),
-    s: pop(6) * key([55, 150], [1, 0.8]),
-    r: key([55, 130, last], [0, 16, 30]),
-    a: key([100, 150], [1, 0.22]),
-  };
-  // ORB → grows into the corner glow
-  const orb = {
-    x: key([14, 55, 150], [640, 770, 1060]) + Math.sin(ph * 0.7) * 14,
-    y: key([14, 55, 150], [252, 200, 150]) + Math.cos(ph * 0.6) * 12,
-    s: pop(14) * key([55, 160], [1, 3.1]),
-  };
-  // BAR → slides down + stretches into the bottom progress streak
-  const bar = {
-    x: key([22, 55, 150], [880, 820, 640]),
-    y: key([22, 55, 158], [284, 360, 690]),
-    w: key([55, 158], [220, 1280]),
-    h: key([110, 158], [64, 6]),
-    r: key([55, 82, 110], [0, -5, 0]),
-    a: key([120, 150], [1, 0.9]),
-  };
-
-  // the source panel: fades in once the three cards have popped, gone once they start moving
-  const codeOp = seg(30, 44) * seg(96, 114, 1, 0);
-
-  const head1 = seg(0, 14) * seg(92, 106, 1, 0); // "// just divs"
-  const head2 = seg(58, 72) * seg(98, 112, 1, 0); // "// now they move"
-  const vidCap = seg(112, 126) * seg(146, 158, 1, 0); // <Video> caption pulse
-  const titleIn = seg(172, 192);
+  // ── the film ── footage bursts in as the base layer; trimBefore offsets the source so its ~2s
+  // on screen stays inside the 4s clip (the comp is longer than the clip).
+  const vIn = Math.max(0, spring({ frame: frame - 150, fps, config: { damping: 16, stiffness: 85 } }));
+  const vScale = vIn * key([196, last], [1, 1.12]);
+  const gradeHue = key([165, last], [330, 268]);
+  const titleIn = seg(180, 198);
 
   return (
     <AbsoluteFill style={{ fontFamily: SANS, overflow: 'hidden' }}>
-      {/* FOOTAGE — bottom layer. trimBefore offsets the SOURCE so the clip starts at 0 right when
-          it bursts in (~f104); before that the negative source clamps to frame 0 (and it's scaled
-          to nothing anyway). Keeps the seeked source ≤3.5s, inside the 4s clip — otherwise the
-          7s comp would seek the <Video> past its end and stall the export's decoder. */}
+      {/* FOOTAGE — bottom layer */}
       <AbsoluteFill style={{ transform: `scale(${vScale})`, overflow: 'hidden' }}>
-        <Video src={staticFile('demo-clip.mp4')} trimBefore={-104} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        <Video src={staticFile('demo-clip.mp4')} trimBefore={-150} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
       </AbsoluteFill>
 
-      {/* hue-shifting color grade over the footage (fades in with the film) */}
+      {/* color grade over the footage */}
       <AbsoluteFill
         style={{
-          opacity: seg(118, 175) * 0.34,
+          opacity: seg(160, 200) * 0.34,
           background: `linear-gradient(120deg, hsla(${gradeHue},85%,55%,0.6) 0%, transparent 55%, hsla(${gradeHue - 70},85%,52%,0.5) 100%)`,
         }}
       />
 
-      {/* ORB (the radial-gradient div from card #2, grown into a corner glow) */}
+      {/* extra glows that pile in as it "gets complicated" */}
       <div
         style={{
           position: 'absolute',
-          left: orb.x,
-          top: orb.y,
-          width: 120,
-          height: 120,
-          transform: `translate(-50%,-50%) scale(${orb.s})`,
+          left: 1080 + Math.sin(ph * 0.6) * 40,
+          top: 150,
+          width: 460,
+          height: 460,
+          transform: 'translate(-50%,-50%)',
+          opacity: seg(150, 185) * 0.75,
           borderRadius: '50%',
-          background: 'radial-gradient(circle at 38% 32%, #ffe08a, #ff5e8a 58%, rgba(255,94,138,0) 74%)',
+          background: 'radial-gradient(circle at 38% 32%, hsla(38,100%,68%,0.9), transparent 70%)',
         }}
       />
-      {/* a second glow joins as it gets complicated */}
       <div
         style={{
           position: 'absolute',
-          left: 120 + Math.sin(ph * 0.5) * 40,
-          top: 640,
+          left: 160 + Math.cos(ph * 0.5) * 36,
+          top: 600,
           width: 520,
           height: 520,
           transform: 'translate(-50%,-50%)',
-          opacity: seg(128, 168) * 0.7,
+          opacity: seg(158, 192) * 0.7,
           borderRadius: '50%',
           background: 'radial-gradient(circle at 40% 35%, hsla(262,95%,66%,0.9), transparent 68%)',
         }}
       />
 
-      {/* SQUARE (card #1) */}
+      {/* THE HERO SQUARE — a div with a border, then +radius +rotate +shadow +gradient */}
       <div
         style={{
           position: 'absolute',
-          left: sq.x,
-          top: sq.y,
-          width: 120,
-          height: 120,
-          marginLeft: -60,
-          marginTop: -60,
-          transform: `scale(${sq.s}) rotate(${sq.r}deg)`,
-          transformOrigin: 'center',
-          borderRadius: 28,
-          background: `rgba(255,94,138,${sq.a})`,
-          boxShadow: `0 18px 60px rgba(255,94,138,${sq.a * 0.6})`,
+          left: sqX,
+          top: sqY,
+          width: 200,
+          height: 200,
+          marginLeft: -100,
+          marginTop: -100,
+          transform: `rotate(${rot}deg) scale(${sqScale * sqGrow})`,
+          borderRadius: br,
+          border: `3px solid rgba(255,94,138,${borderA})`,
+          boxShadow: `0 30px 80px rgba(255,94,138,${shadow * 0.45})`,
+          opacity: sqOpacity,
         }}
-      />
+      >
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            borderRadius: br,
+            background: 'linear-gradient(135deg,#ff5e8a,#ffb24a)',
+            opacity: bgFade,
+          }}
+        />
+      </div>
 
-      {/* BAR (card #3 → bottom streak) */}
+      {/* THE SOURCE — builds up line by line on the left, mirroring the square */}
       <div
         style={{
           position: 'absolute',
-          left: bar.x,
-          top: bar.y,
-          width: bar.w,
-          height: bar.h,
-          marginLeft: -bar.w / 2,
-          marginTop: -bar.h / 2,
-          transform: `rotate(${bar.r}deg)`,
-          opacity: bar.a,
-          borderRadius: bar.h > 20 ? 14 : 3,
-          background: 'linear-gradient(90deg,#a64bf4,#2bd2ff)',
-        }}
-      />
-
-      {/* THE LITERAL SOURCE of the three cards above — one tidy panel, no overlap. */}
-      <div
-        style={{
-          position: 'absolute',
-          left: 640,
-          top: 432,
-          transform: `translateX(-50%) translateY(${interpolate(codeOp, [0, 1], [10, 0])}px)`,
+          left: 70,
+          top: 196,
+          transform: `translateX(${codeX}px)`,
           opacity: codeOp,
-          background: 'rgba(9,10,17,0.82)',
+          background: 'rgba(9,10,17,0.8)',
           borderRadius: 14,
-          padding: '18px 24px',
+          padding: '22px 26px',
           border: '1px solid #24242f',
-          boxShadow: '0 24px 70px rgba(0,0,0,0.55)',
+          boxShadow: '0 24px 70px rgba(0,0,0,0.5)',
         }}
       >
-        <CodeLine text="<div style={{ borderRadius: 28, background: '#ff5e8a' }} />" />
-        <CodeLine text="<div style={{ borderRadius: '50%', background:" />
-        <CodeLine text="  'radial-gradient(circle, #ffd36e, #ff5e8a)' }} />" />
-        <CodeLine text="<div style={{ borderRadius: 14, background:" />
-        <CodeLine text="  'linear-gradient(90deg, #a64bf4, #2bd2ff)' }} />" />
+        {LINES.map((ln) => {
+          const o = seg(ln.f, ln.f + 8);
+          const fresh = frame >= ln.f && frame < ln.f + 20;
+          return (
+            <div
+              key={ln.t}
+              style={{
+                opacity: o,
+                transform: `translateX(${interpolate(o, [0, 1], [10, 0])}px)`,
+                background: fresh ? 'rgba(255,94,138,0.14)' : 'transparent',
+                borderRadius: 5,
+                margin: '0 -6px',
+                padding: '0 6px',
+              }}
+            >
+              <CodeLine text={ln.t} />
+            </div>
+          );
+        })}
       </div>
 
-      {/* the <Video> tag, revealed as the footage bursts in */}
-      <div
-        style={{
-          position: 'absolute',
-          left: 640,
-          top: 360,
-          transform: `translate(-50%,-50%) scale(${interpolate(vidCap, [0, 1], [0.9, 1])})`,
-          opacity: vidCap,
-          background: 'rgba(6,6,12,0.7)',
-          borderRadius: 12,
-          padding: '14px 20px',
-          border: '1px solid rgba(255,255,255,0.18)',
-        }}
-      >
-        <CodeLine text="<Video src={staticFile('demo-clip.mp4')} />" size={20} />
-      </div>
-
-      {/* header comment (top), crossfading P1 → P2 */}
-      <div style={{ position: 'absolute', top: 86, left: 0, width: '100%', textAlign: 'center' }}>
-        <div style={{ opacity: head1 }}>
-          <CodeLine text="// three inline-styled <div>s. that's the whole frame." size={16} />
-        </div>
-        <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', opacity: head2 }}>
-          <CodeLine text="// + useCurrentFrame() — now they move" size={16} />
+      {/* header that frames the moment */}
+      <div style={{ position: 'absolute', top: 96, left: 0, width: '100%', textAlign: 'center' }}>
+        <div style={{ opacity: seg(2, 14) * seg(126, 142, 1, 0), fontFamily: MONO, fontSize: 16, color: 'rgba(255,255,255,0.5)' }}>
+          {'// you already know this one'}
         </div>
       </div>
 
       {/* THE PUNCHLINE */}
-      <AbsoluteFill style={{ alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 96, opacity: titleIn }}>
+      <AbsoluteFill style={{ alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 92, opacity: titleIn }}>
         <div style={{ transform: `translateY(${interpolate(titleIn, [0, 1], [26, 0])}px)`, textAlign: 'center' }}>
           <div style={{ fontFamily: MONO, fontSize: 15, color: 'rgba(255,255,255,0.55)', letterSpacing: 1, marginBottom: 12 }}>
-            {'// it was <div>s the whole time'}
+            {'// border, radius, rotate, shadow, gradient…'}
           </div>
           <div
             style={{
@@ -222,7 +199,7 @@ export function CodeToFilm(): JSX.Element {
               textShadow: '0 8px 40px rgba(0,0,0,0.7)',
             }}
           >
-            It&rsquo;s just HTML &amp; CSS.
+            You already know CSS.
           </div>
           <div
             style={{
@@ -235,7 +212,7 @@ export function CodeToFilm(): JSX.Element {
               WebkitTextFillColor: 'transparent',
             }}
           >
-            And it&rsquo;s a full video.
+            It&rsquo;s also a full video.
           </div>
         </div>
       </AbsoluteFill>
