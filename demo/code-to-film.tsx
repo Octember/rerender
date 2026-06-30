@@ -15,19 +15,22 @@ const STR = '#98c379';
 // lasts; the starts accumulate into T.<beat>, so to make a phase breathe you just bump its
 // duration and everything after it slides to match — no chasing magic numbers through the JSX.
 const BEATS = [
-  { k: 'lead', d: 6 }, //      a still moment before anything appears
-  { k: 'pop', d: 140 }, //     a bordered square springs in — and holds, so it reads
-  { k: 'round', d: 120 }, //   its corners round off
-  { k: 'tilt', d: 120 }, //    it rotates
-  { k: 'lift', d: 120 }, //    a shadow lifts it off the page
-  { k: 'fill', d: 90 }, //     a gradient fills the face — the card is complete
-  { k: 'compose', d: 64 }, //  it glides to centre and multiplies into a grid of pure CSS
-  { k: 'grow', d: 42 }, //     the card grows into a full-frame screen, the footage inside it
+  { k: 'lead', d: 4 }, //      a still moment before anything appears
+  { k: 'pop', d: 92 }, //      a bordered square springs in — and holds, so it reads
+  { k: 'round', d: 80 }, //    its corners round off
+  { k: 'tilt', d: 80 }, //     it rotates
+  { k: 'lift', d: 80 }, //     a shadow lifts it off the page
+  { k: 'fill', d: 60 }, //     a gradient fills the face — the card is complete
+  { k: 'compose', d: 56 }, //  it glides to centre and multiplies into a grid of pure CSS
+  { k: 'grow', d: 76 }, //     the card grows into a full-frame screen, the footage inside it
   { k: 'film', d: 58 }, //     the finished film plays and the punchline lands
 ] as const;
 // how long each CSS property takes to MORPH in (frames). Wide = the change glides slowly into
 // place instead of snapping then sitting on a dead hold — the build reads as luxurious, not static.
-const MORPH = 84;
+const MORPH = 56;
+// how long the card takes to grow into the screen AND the grid to explode outward. Kept close to
+// MORPH so the reveal lands at the SAME deliberate pace as the build — no jarring fast "explode".
+const GROW_SPAN = 60;
 type BeatKey = (typeof BEATS)[number]['k'];
 const T = {} as Record<BeatKey, number>;
 let acc = 0;
@@ -101,28 +104,29 @@ export function CodeToFilm(): JSX.Element {
   //    full-frame screen with the footage revealed inside it (Act 3) ──
   const heroPop = Math.max(0, spring({ frame: frame - T.pop, fps, config: { damping: 11, stiffness: 130 } }));
   const heroX = key([T.compose, T.compose + 24], [772, 640]);
-  const heroW = key([T.grow, T.grow + 40], [244, 1280]);
-  const heroH = key([T.grow, T.grow + 40], [244, 720]);
-  const heroRadius = key([T.round, T.round + MORPH, T.grow, T.grow + 40], [2, 28, 28, 0]);
-  const heroRot = key([T.tilt, T.tilt + MORPH, T.grow - 40, T.grow - 22], [0, -10, -10, 0]);
-  const heroBorderA = seg(T.pop + 12, T.pop + 40) * seg(T.grow - 2, T.grow + 16, 1, 0);
-  const heroShadow = seg(T.lift, T.lift + MORPH) * seg(T.grow - 2, T.grow + 20, 1, 0);
-  const faceFade = seg(T.fill, T.fill + MORPH) * seg(T.grow, T.grow + 28, 1, 0); // gradient FACE fades to reveal the footage
+  const heroW = key([T.grow, T.grow + GROW_SPAN], [244, 1280]);
+  const heroH = key([T.grow, T.grow + GROW_SPAN], [244, 720]);
+  const heroRadius = key([T.round, T.round + MORPH, T.grow, T.grow + GROW_SPAN], [2, 28, 28, 0]);
+  const heroRot = key([T.tilt, T.tilt + MORPH, T.grow - 44, T.grow - 24], [0, -10, -10, 0]);
+  const heroBorderA = seg(T.pop + 8, T.pop + 28) * seg(T.grow - 2, T.grow + 22, 1, 0);
+  const heroShadow = seg(T.lift, T.lift + MORPH) * seg(T.grow - 2, T.grow + 26, 1, 0);
+  const faceFade = seg(T.fill, T.fill + MORPH) * seg(T.grow + 4, T.grow + 52, 1, 0); // gradient FACE fades to reveal the footage
   // only deliberate scale moves remain: a soft settle as it reaches centre, and a slow push on the film
-  const heroScale = heroPop * key([T.compose + 6, T.compose + 22, T.compose + 36], [1, 1.1, 1]) * key([T.grow + 40, last], [1, 1.08]);
+  const heroScale =
+    heroPop * key([T.compose + 6, T.compose + 22, T.compose + 36], [1, 1.1, 1]) * key([T.grow + GROW_SPAN, last], [1, 1.08]);
 
   const codeOp = seg(T.pop - 4, T.pop + 6) * seg(T.compose, T.compose + 16, 1, 0);
   const codeCursor = LINES.reduce((a, l, i) => (frame >= l.f ? i : a), -1); // line currently "typing"
-  const gridIn = seg(T.grow - 10, T.grow + 12, 1, 0); // grid recedes as the hero opens
-  const glowOp = seg(T.compose + 14, T.compose + 34) * seg(T.grow - 4, T.grow + 16, 1, 0);
-  const grade = seg(T.grow + 26, T.grow + 56) * 0.32;
-  const gradeHue = key([T.grow + 26, last], [330, 268]);
+  const gridIn = seg(T.grow - 12, T.grow + 44, 1, 0); // grid EXPLODES outward as the hero opens — slow, to match the build pace
+  const glowOp = seg(T.compose + 14, T.compose + 34) * seg(T.grow - 6, T.grow + 30, 1, 0);
+  const grade = seg(T.grow + 44, T.grow + 74) * 0.32;
+  const gradeHue = key([T.grow + 44, last], [330, 268]);
   // kinetic closer — the lines spring in staggered, the punchline biggest + last
   const tSpring = (d: number): number => Math.max(0, spring({ frame: frame - d, fps, config: { damping: 13, stiffness: 110 } }));
   const t1 = tSpring(T.film + 12);
   const t2 = tSpring(T.film + 22);
   const t3 = seg(T.film + 36, T.film + 52);
-  const flash = seg(T.grow + 6, T.grow + 13, 0, 0.92) * seg(T.grow + 13, T.grow + 32, 1, 0); // bloom-burst as the card opens into the film
+  const flash = seg(T.grow + 14, T.grow + 24, 0, 0.92) * seg(T.grow + 24, T.grow + 56, 1, 0); // bloom-burst as the card opens into the film
   // a FIXED overscan — deliberately NOT animated. An ancestor scale that changes every frame forces
   // every glyph beneath it to re-rasterize and snap to the pixel grid each frame, which reads as Y
   // jitter on the type. The drift that needed a moving zoom is gone, so this stays constant.
@@ -136,7 +140,7 @@ export function CodeToFilm(): JSX.Element {
           the footage reveals, since the export composites any non-video layer ON TOP of the video */}
         <AbsoluteFill
           style={{
-            opacity: seg(0, 18) * seg(T.grow - 18, T.grow - 2, 1, 0),
+            opacity: seg(0, 18) * seg(T.grow - 24, T.grow - 2, 1, 0),
             background: 'radial-gradient(125% 85% at 50% 36%, #17121f 0%, #0a0712 52%, #040209 100%)',
           }}
         />
@@ -233,7 +237,7 @@ export function CodeToFilm(): JSX.Element {
               inset: 0,
               borderRadius: heroRadius,
               background: 'linear-gradient(135deg,#15111f,#0b0910)',
-              opacity: seg(T.grow, T.grow + 28, 1, 0),
+              opacity: seg(T.grow + 4, T.grow + 52, 1, 0),
             }}
           />
           <div
@@ -260,7 +264,7 @@ export function CodeToFilm(): JSX.Element {
         {/* warm directional key light from above + a teal floor — golden-hour dimension on the footage */}
         <AbsoluteFill
           style={{
-            opacity: seg(T.grow + 26, T.grow + 54) * 0.9,
+            opacity: seg(T.grow + 44, T.grow + 74) * 0.9,
             background:
               'radial-gradient(95% 62% at 50% -10%, rgba(255,198,120,0.42), transparent 52%), radial-gradient(120% 70% at 50% 120%, rgba(30,120,150,0.32), transparent 55%)',
           }}
@@ -286,7 +290,7 @@ export function CodeToFilm(): JSX.Element {
         ))}
         {/* cinematic vignette for depth */}
         <AbsoluteFill
-          style={{ opacity: seg(T.grow + 26, T.grow + 54) * 0.55, background: 'radial-gradient(circle at 50% 46%, transparent 42%, rgba(2,1,8,0.9) 100%)' }}
+          style={{ opacity: seg(T.grow + 44, T.grow + 74) * 0.55, background: 'radial-gradient(circle at 50% 46%, transparent 42%, rgba(2,1,8,0.9) 100%)' }}
         />
         {/* light bloom-burst as the card opens into the film */}
         <AbsoluteFill
@@ -344,18 +348,21 @@ export function CodeToFilm(): JSX.Element {
         <div
           style={{
             position: 'absolute',
-            top: 92,
+            top: 88,
             left: 0,
             width: '100%',
             textAlign: 'center',
             fontFamily: MONO,
-            fontSize: 16,
-            color: 'rgba(255,255,255,0.5)',
+            fontSize: 21,
+            fontWeight: 500,
+            letterSpacing: 0.3,
+            color: 'rgba(255,255,255,0.82)',
+            textShadow: '0 2px 16px rgba(0,0,0,0.85)',
           }}
         >
           <span style={{ opacity: seg(2, 12) * seg(T.compose, T.compose + 16, 1, 0) }}>{'// it starts with one <div>'}</span>
           <span
-            style={{ position: 'absolute', left: 0, width: '100%', opacity: seg(T.compose + 24, T.compose + 38) * seg(T.grow - 10, T.grow + 4, 1, 0) }}
+            style={{ position: 'absolute', left: 0, width: '100%', opacity: seg(T.compose + 16, T.compose + 30) * seg(T.grow - 8, T.grow + 6, 1, 0) }}
           >
             {'// …and it composes — all of it just CSS'}
           </span>
