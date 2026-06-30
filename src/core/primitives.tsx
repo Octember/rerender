@@ -165,11 +165,14 @@ export function Video({
       playsInline
       crossOrigin={crossOrigin}
       className={className}
-      // No hint on the <video> itself — a filter HERE keeps it a separate (now texture) layer,
-      // which still gets position-snapped to whole device pixels when scaled. The fix is on the
-      // Player's scaled container, whose filter flattens this video INTO the down-scaled layer so
-      // it's sub-pixel sampled. (A composition's own style wins via ...style.)
-      style={style}
+      // Force the playing <video> OFF Chrome's hardware video-overlay plane with an imperceptible
+      // rotation. A hardware overlay must be an axis-aligned rectangle, so ANY rotation (0.04deg
+      // here) demotes the video to a regular composited texture — which then flattens into the
+      // Player container's filtered raster and gets bilinearly sub-pixel down-scaled, instead of
+      // the overlay being presented snapped to whole device pixels (the per-frame shake). The
+      // rotation is sub-0.1px / clipped, and the export ignores it (composites videos by bounding
+      // box, and runs paused). Only applied while playing. (A composition's own style wins below.)
+      style={playing ? { ...style, transform: `${style?.transform ? `${style.transform} ` : ''}rotate(0.04deg)` } : style}
       onCanPlay={onCanPlay}
       onError={onError}
       onSeeking={onSeeking}
