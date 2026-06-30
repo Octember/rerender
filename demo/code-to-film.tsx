@@ -336,8 +336,11 @@ export function CodeToFilm(): JSX.Element {
           style={{
             position: 'absolute',
             left: 66,
-            top: 220,
-            transform: `translateX(${key([T.compose, T.compose + 20], [0, -90])}px)`,
+            // vertically centered on the frame (matches the hero square's own centerline at y=360)
+            // regardless of how tall the panel grows as lines type in — top:50% + translateY(-50%)
+            // self-centers instead of a fixed top that only suited the panel's fully-built height.
+            top: '50%',
+            transform: `translateY(-50%) translateX(${key([T.compose, T.compose + 20], [0, -90])}px)`,
             opacity: codeOp,
             background: 'rgba(9,10,17,0.82)',
             borderRadius: 14,
@@ -379,12 +382,12 @@ export function CodeToFilm(): JSX.Element {
         <div
           style={{
             position: 'absolute',
-            top: 88,
+            top: 80,
             left: 0,
             width: '100%',
             textAlign: 'center',
             fontFamily: MONO,
-            fontSize: 21,
+            fontSize: 28,
             fontWeight: 500,
             letterSpacing: 0.3,
             color: 'rgba(255,255,255,0.82)',
