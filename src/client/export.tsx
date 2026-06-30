@@ -225,7 +225,15 @@ export async function exportToMp4(opts: ClientExportOptions): Promise<Blob> {
   const ctx = canvas.getContext('2d', { alpha: false })!;
   const target = new BufferTarget();
   const output = new Output({ format: new Mp4OutputFormat({ fastStart: 'in-memory' }), target });
-  const source = new CanvasSource(canvas, { codec, bitrate: QUALITY_HIGH });
+  const source = new CanvasSource(canvas, {
+    codec,
+    bitrate: QUALITY_HIGH,
+    // Prefer the GPU encoder (VideoToolbox/NVENC) — silently falls back to software. NOT
+    // latencyMode:'realtime', which may DROP frames under load and corrupt a frame-accurate export.
+    hardwareAcceleration: 'prefer-hardware',
+    // One keyframe for the whole clip (only frame 0, forced below) — no periodic I-frames to encode.
+    keyFrameInterval: durationInFrames / fps,
+  });
   output.addVideoTrack(source, { frameRate: fps });
   await output.start();
 
@@ -248,14 +256,20 @@ export async function exportToMp4(opts: ClientExportOptions): Promise<Blob> {
 
   try {
     await document.fonts.ready;
+    // Pipeline: source.add() captures the canvas synchronously then encodes async, so we don't await
+    // it immediately — the encoder (ideally GPU) drains frame N while the main thread renders N+1.
+    // We only await the PREVIOUS add() before queuing the next, to respect encoder backpressure.
+    let pending: Promise<unknown> = Promise.resolve();
     for (let f = 0; f < durationInFrames; f++) {
       if (signal?.aborted) throw new Error('export aborted');
       flushSync(() => setFrameRef.current(f));
       await paintFrame(stage, ctx, width, height, frames);
+      await pending;
+      pending = source.add(f / fps, 1 / fps, f === 0 ? { keyFrame: true } : undefined);
       onFrame?.(canvas, f);
-      await source.add(f / fps, 1 / fps, f === 0 ? { keyFrame: true } : undefined);
       onProgress?.(f + 1, durationInFrames);
     }
+    await pending;
     await output.finalize();
     if (!target.buffer) throw new Error('mediabunny finalize produced no data');
     return new Blob([target.buffer], { type: 'video/mp4' });
