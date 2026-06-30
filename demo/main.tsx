@@ -1,7 +1,6 @@
 import { createRoot } from 'react-dom/client';
 import { ExportShowcase } from './export-showcase';
 
-const ACCENT = '#ff5e8a';
 const root = document.getElementById('root');
 if (!root) throw new Error('no #root');
 
@@ -21,10 +20,7 @@ createRoot(root).render(
       </header>
 
       <section style={{ marginBottom: 36 }}>
-        <div style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12, color: ACCENT, letterSpacing: 2, fontWeight: 600 }}>
-          NO SERVER · NO FFMPEG
-        </div>
-        <h1 style={{ fontSize: 56, fontWeight: 850, lineHeight: 1.04, margin: '14px 0 18px', letterSpacing: -1.6 }}>
+        <h1 style={{ fontSize: 'clamp(34px, 8.5vw, 56px)', fontWeight: 850, lineHeight: 1.05, margin: '0 0 18px', letterSpacing: -1.6 }}>
           Export video{' '}
           <span
             style={{
