@@ -70,23 +70,34 @@ export function CodeToFilm(): JSX.Element {
 
   // ── hero card: built (Act 1, center-right) → centers for the grid (Act 2) → grows into the
   //    full-frame screen with the footage revealed inside it (Act 3) ──
-  const heroPop = Math.max(0, spring({ frame: frame - 8, fps, config: { damping: 14, stiffness: 120 } }));
+  const heroPop = Math.max(0, spring({ frame: frame - 8, fps, config: { damping: 11, stiffness: 130 } }));
+  // the square reacts to each CSS property landing — a little overshoot of life (secondary motion)
+  const bump = (at: number, amp = 0.06): number => {
+    const x = (frame - at) / 7;
+    return x > 0 && x < 1 ? Math.sin(x * Math.PI) * amp : 0;
+  };
+  const heroFloat = Math.sin(ph * 2.3) * 6 * seg(26, 44) * seg(116, 132, 1, 0); // gentle bob while it's a card
   const heroX = key([72, 96], [772, 640]);
-  const heroW = key([140, 182], [220, 1280]);
-  const heroH = key([140, 182], [220, 720]);
+  const heroW = key([140, 182], [244, 1280]);
+  const heroH = key([140, 182], [244, 720]);
   const heroRadius = key([28, 42, 140, 182], [2, 28, 28, 0]);
   const heroRot = key([40, 56, 104, 122], [0, -10, -10, 0]);
   const heroBorderA = seg(14, 24) * seg(140, 158, 1, 0);
   const heroShadow = seg(52, 66) * seg(140, 162, 1, 0);
   const faceFade = seg(62, 78) * seg(142, 168, 1, 0); // gradient FACE fades to reveal the footage
-  const heroScale = heroPop * key([78, 94, 108], [1, 1.1, 1]) * key([182, last], [1, 1.08]);
+  const heroScale = heroPop * (1 + bump(28) + bump(40) + bump(62)) * key([78, 94, 108], [1, 1.1, 1]) * key([182, last], [1, 1.08]);
 
   const codeOp = seg(6, 16) * seg(74, 90, 1, 0);
   const gridIn = seg(132, 154, 1, 0); // grid recedes as the hero opens
   const glowOp = seg(86, 106) * seg(138, 158, 1, 0);
   const grade = seg(166, 196) * 0.32;
   const gradeHue = key([166, last], [330, 268]);
-  const titleIn = seg(198, 218);
+  // kinetic closer — the lines spring in staggered, the punchline biggest + last
+  const tSpring = (d: number): number => Math.max(0, spring({ frame: frame - d, fps, config: { damping: 13, stiffness: 110 } }));
+  const t1 = tSpring(196);
+  const t2 = tSpring(206);
+  const t3 = seg(220, 236);
+  const flash = seg(144, 152, 0, 0.72) * seg(152, 178, 1, 0); // a bloom of light as the card opens into the film
 
   return (
     <AbsoluteFill style={{ fontFamily: SANS, overflow: 'hidden' }}>
@@ -95,13 +106,14 @@ export function CodeToFilm(): JSX.Element {
         style={{ opacity: glowOp * 0.6, background: 'radial-gradient(circle at 50% 50%, rgba(166,75,244,0.5), transparent 58%)' }}
       />
 
-      {/* THE DESIGN LANGUAGE — a labeled grid of styled divs around the hero (Act 2) */}
+      {/* THE DESIGN LANGUAGE — a labeled grid of styled divs that fly out of the hero with 3D depth */}
       {GRID.map((c, i) => {
         const order = Math.abs(c.dx) + Math.abs(c.dy); // assemble from the centre outward
-        const pop = Math.max(0, spring({ frame: frame - (88 + (order / G) * 6), fps, config: { damping: 15, stiffness: 130 } }));
-        const cx = 640 + c.dx;
-        const cy = 360 + c.dy + Math.sin(ph * 0.8 + i) * 7;
-        const sc = pop * gridIn * (1 - (1 - gridIn) * 0.3);
+        const pop = Math.max(0, spring({ frame: frame - (88 + (order / G) * 6), fps, config: { damping: 13, stiffness: 130 } }));
+        const spread = pop * (1 + (1 - gridIn) * 2.2); // fly OUT of the hero, then explode outward as it opens
+        const cx = 640 + c.dx * spread;
+        const cy = 360 + c.dy * spread + Math.sin(ph * 0.8 + i) * 6 * gridIn;
+        const ry = (c.dx / G) * -13; // perspective depth — the grid faces the camera like a wall
         return (
           <div
             key={c.label}
@@ -113,7 +125,7 @@ export function CodeToFilm(): JSX.Element {
               height: 138,
               marginLeft: -69,
               marginTop: -69,
-              transform: `scale(${sc})`,
+              transform: `perspective(820px) rotateY(${ry}deg) scale(${pop})`,
               opacity: gridIn,
             }}
           >
@@ -154,7 +166,7 @@ export function CodeToFilm(): JSX.Element {
         style={{
           position: 'absolute',
           left: heroX,
-          top: 360,
+          top: 360 + heroFloat,
           width: heroW,
           height: heroH,
           marginLeft: -heroW / 2,
@@ -211,6 +223,13 @@ export function CodeToFilm(): JSX.Element {
       {/* cinematic vignette for depth */}
       <AbsoluteFill
         style={{ opacity: seg(168, 196) * 0.55, background: 'radial-gradient(circle at 50% 46%, transparent 42%, rgba(2,1,8,0.9) 100%)' }}
+      />
+      {/* light bloom as the card opens into the film */}
+      <AbsoluteFill
+        style={{
+          opacity: flash,
+          background: 'radial-gradient(circle at 50% 48%, rgba(255,240,228,0.95), rgba(255,180,150,0.35) 34%, transparent 60%)',
+        }}
       />
 
       {/* THE SOURCE — builds line by line (Act 1) */}
@@ -273,34 +292,38 @@ export function CodeToFilm(): JSX.Element {
         </span>
       </div>
 
-      {/* THE PUNCHLINE — solid colours (gradient-clip text doesn't survive the export) */}
-      <AbsoluteFill style={{ alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 84, opacity: titleIn }}>
-        <div style={{ transform: `translateY(${interpolate(titleIn, [0, 1], [24, 0])}px)`, textAlign: 'center' }}>
+      {/* THE PUNCHLINE — staggered kinetic reveal, solid colours (gradient-clip text doesn't export) */}
+      <AbsoluteFill style={{ alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 78 }}>
+        <div style={{ textAlign: 'center' }}>
           <div
             style={{
-              fontSize: 58,
-              fontWeight: 850,
-              lineHeight: 1.04,
-              letterSpacing: -1.5,
-              color: '#fff',
-              textShadow: '0 8px 40px rgba(0,0,0,0.75)',
+              fontSize: 34,
+              fontWeight: 700,
+              letterSpacing: -0.5,
+              color: 'rgba(255,255,255,0.92)',
+              opacity: t1,
+              transform: `translateY(${interpolate(t1, [0, 1], [22, 0])}px)`,
+              textShadow: '0 6px 30px rgba(0,0,0,0.8)',
+              marginBottom: 6,
             }}
           >
             This is one React component.
           </div>
           <div
             style={{
-              fontSize: 58,
+              fontSize: 72,
               fontWeight: 850,
-              lineHeight: 1.04,
-              letterSpacing: -1.5,
-              color: '#ff7da1',
-              textShadow: '0 8px 40px rgba(0,0,0,0.6)',
+              lineHeight: 1.0,
+              letterSpacing: -2,
+              color: '#ff6f9d',
+              opacity: t2,
+              transform: `translateY(${interpolate(t2, [0, 1], [30, 0])}px) scale(${interpolate(t2, [0, 1], [0.94, 1])})`,
+              textShadow: '0 10px 50px rgba(255,94,138,0.45), 0 4px 20px rgba(0,0,0,0.6)',
             }}
           >
             It rendered itself to MP4.
           </div>
-          <div style={{ marginTop: 16, fontFamily: MONO, fontSize: 16, color: 'rgba(255,255,255,0.72)', letterSpacing: 0.5 }}>
+          <div style={{ marginTop: 18, fontFamily: MONO, fontSize: 15, color: 'rgba(255,255,255,0.66)', letterSpacing: 1, opacity: t3 }}>
             in your browser · no server · no ffmpeg
           </div>
         </div>
