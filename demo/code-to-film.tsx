@@ -117,14 +117,12 @@ export function CodeToFilm(): JSX.Element {
   const heroBorderA = seg(T.pop + 8, T.pop + 28) * seg(T.grow - 2, T.grow + 22, 1, 0);
   const heroShadow = seg(T.lift, T.lift + MORPH) * seg(T.grow - 2, T.grow + 26, 1, 0);
   const faceFade = seg(T.fill, T.fill + MORPH) * seg(T.grow + 4, T.grow + 52, 1, 0); // gradient FACE fades to reveal the footage
-  // NOT a continuous push during the film act anymore — that animated the hero wrapper's scale for
-  // the whole ~3.8s film act, and the <Video> inside it sits under that same ancestor transform. An
-  // ancestor scale that changes every frame forces a re-rasterize/re-snap of whatever's beneath it
-  // each frame (the same mechanism the camera drift caused text jitter with, fixed earlier by making
-  // camZoom constant) — here it read as the footage "zooming weirdly." Only the compose-phase settle
-  // bounce remains; the hero (and the video inside it) is a flat, non-animating scale once it's grown
-  // to full screen.
-  const heroScale = heroPop * key([T.compose + 6, T.compose + 22, T.compose + 36], [1, 1.1, 1]);
+  // the soft settle as it reaches centre, PLUS a continuous slow push that runs all the way to the
+  // last frame (the zoom must not stop short of the end). The jitter this caused turned out to be an
+  // EXPORT-pipeline artifact, not a live-compositing one — see paintFrame's pixel-rounding in
+  // export.tsx — so the fix lives there, not by truncating or freezing this value.
+  const heroScale =
+    heroPop * key([T.compose + 6, T.compose + 22, T.compose + 36], [1, 1.1, 1]) * key([T.grow + GROW_SPAN, last], [1, 1.08]);
 
   const codeOp = seg(T.pop - 4, T.pop + 6) * seg(T.compose, T.compose + 16, 1, 0);
   const codeCursor = LINES.reduce((a, l, i) => (frame >= l.f ? i : a), -1); // line currently "typing"
