@@ -11,14 +11,14 @@ const MONO = 'ui-monospace, "SF Mono", Menlo, monospace';
 const STR = '#98c379';
 
 const LINES: { f: number; t: string }[] = [
-  { f: 6, t: '<div style={{' },
-  { f: 18, t: '  width: 200, height: 200,' },
-  { f: 24, t: "  border: '3px solid #ff5e8a'," },
-  { f: 40, t: '  borderRadius: 28,' },
-  { f: 56, t: "  transform: 'rotate(-10deg)'," },
-  { f: 72, t: "  boxShadow: '0 30px 80px #ff5e8a66'," },
-  { f: 88, t: "  background: 'linear-gradient(#ff5e8a,#ffb24a)'," },
-  { f: 100, t: '}} />' },
+  { f: 4, t: '<div style={{' },
+  { f: 12, t: '  width: 200, height: 200,' },
+  { f: 16, t: "  border: '3px solid #ff5e8a'," },
+  { f: 28, t: '  borderRadius: 28,' },
+  { f: 40, t: "  transform: 'rotate(-10deg)'," },
+  { f: 52, t: "  boxShadow: '0 30px 80px #ff5e8a66'," },
+  { f: 62, t: "  background: 'linear-gradient(#ff5e8a,#ffb24a)'," },
+  { f: 74, t: '}} />' },
 ];
 
 // the design language — one div becomes a whole grid of CSS, each cell a technique
@@ -64,23 +64,23 @@ export function CodeToFilm(): JSX.Element {
 
   // ── hero card: built (Act 1, center-right) → centers for the grid (Act 2) → grows into the
   //    full-frame screen with the footage revealed inside it (Act 3) ──
-  const heroPop = Math.max(0, spring({ frame: frame - 14, fps, config: { damping: 14, stiffness: 120 } }));
-  const heroX = key([96, 120], [772, 640]);
-  const heroW = key([158, 198], [220, 1280]);
-  const heroH = key([158, 198], [220, 720]);
-  const heroRadius = key([40, 56, 158, 198], [2, 28, 28, 0]);
-  const heroRot = key([56, 74, 120, 138], [0, -10, -10, 0]);
-  const heroBorderA = seg(20, 30) * seg(158, 176, 1, 0);
-  const heroShadow = seg(72, 88) * seg(158, 180, 1, 0);
-  const faceFade = seg(88, 104) * seg(160, 186, 1, 0); // gradient FACE fades to reveal the footage
-  const heroScale = heroPop * key([104, 120, 134], [1, 1.1, 1]) * key([198, last], [1, 1.08]);
+  const heroPop = Math.max(0, spring({ frame: frame - 8, fps, config: { damping: 14, stiffness: 120 } }));
+  const heroX = key([72, 96], [772, 640]);
+  const heroW = key([140, 182], [220, 1280]);
+  const heroH = key([140, 182], [220, 720]);
+  const heroRadius = key([28, 42, 140, 182], [2, 28, 28, 0]);
+  const heroRot = key([40, 56, 104, 122], [0, -10, -10, 0]);
+  const heroBorderA = seg(14, 24) * seg(140, 158, 1, 0);
+  const heroShadow = seg(52, 66) * seg(140, 162, 1, 0);
+  const faceFade = seg(62, 78) * seg(142, 168, 1, 0); // gradient FACE fades to reveal the footage
+  const heroScale = heroPop * key([78, 94, 108], [1, 1.1, 1]) * key([182, last], [1, 1.08]);
 
-  const codeOp = seg(8, 18) * seg(96, 112, 1, 0);
-  const gridIn = seg(150, 172, 1, 0); // grid recedes as the hero opens
-  const glowOp = seg(110, 130) * seg(156, 176, 1, 0);
-  const grade = seg(184, 212) * 0.32;
-  const gradeHue = key([184, last], [330, 268]);
-  const titleIn = seg(212, 230);
+  const codeOp = seg(6, 16) * seg(74, 90, 1, 0);
+  const gridIn = seg(132, 154, 1, 0); // grid recedes as the hero opens
+  const glowOp = seg(86, 106) * seg(138, 158, 1, 0);
+  const grade = seg(166, 196) * 0.32;
+  const gradeHue = key([166, last], [330, 268]);
+  const titleIn = seg(198, 218);
 
   return (
     <AbsoluteFill style={{ fontFamily: SANS, overflow: 'hidden' }}>
@@ -92,7 +92,7 @@ export function CodeToFilm(): JSX.Element {
       {/* THE DESIGN LANGUAGE — a labeled grid of styled divs around the hero (Act 2) */}
       {GRID.map((c, i) => {
         const order = Math.abs(c.dx) + Math.abs(c.dy); // assemble from the centre outward
-        const pop = Math.max(0, spring({ frame: frame - (112 + (order / G) * 6), fps, config: { damping: 15, stiffness: 130 } }));
+        const pop = Math.max(0, spring({ frame: frame - (88 + (order / G) * 6), fps, config: { damping: 15, stiffness: 130 } }));
         const cx = 640 + c.dx;
         const cy = 360 + c.dy + Math.sin(ph * 0.8 + i) * 7;
         const sc = pop * gridIn * (1 - (1 - gridIn) * 0.3);
@@ -161,7 +161,7 @@ export function CodeToFilm(): JSX.Element {
         {/* the footage — bottom layer, rounded to the card via the renderer's border-radius clip */}
         <Video
           src={staticFile('demo-clip.mp4')}
-          trimBefore={-158}
+          trimBefore={-140}
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', borderRadius: heroRadius }}
         />
         <div
@@ -185,7 +185,7 @@ export function CodeToFilm(): JSX.Element {
       />
       {/* cinematic vignette for depth */}
       <AbsoluteFill
-        style={{ opacity: seg(186, 214) * 0.55, background: 'radial-gradient(circle at 50% 46%, transparent 42%, rgba(2,1,8,0.9) 100%)' }}
+        style={{ opacity: seg(168, 196) * 0.55, background: 'radial-gradient(circle at 50% 46%, transparent 42%, rgba(2,1,8,0.9) 100%)' }}
       />
 
       {/* THE SOURCE — builds line by line (Act 1) */}
@@ -194,7 +194,7 @@ export function CodeToFilm(): JSX.Element {
           position: 'absolute',
           left: 66,
           top: 220,
-          transform: `translateX(${key([100, 120], [0, -90])}px)`,
+          transform: `translateX(${key([74, 94], [0, -90])}px)`,
           opacity: codeOp,
           background: 'rgba(9,10,17,0.82)',
           borderRadius: 14,
@@ -242,8 +242,8 @@ export function CodeToFilm(): JSX.Element {
           color: 'rgba(255,255,255,0.5)',
         }}
       >
-        <span style={{ opacity: seg(2, 14) * seg(92, 108, 1, 0) }}>{'// it starts with one <div>'}</span>
-        <span style={{ position: 'absolute', left: 0, width: '100%', opacity: seg(120, 134) * seg(150, 164, 1, 0) }}>
+        <span style={{ opacity: seg(2, 12) * seg(72, 88, 1, 0) }}>{'// it starts with one <div>'}</span>
+        <span style={{ position: 'absolute', left: 0, width: '100%', opacity: seg(96, 110) * seg(132, 146, 1, 0) }}>
           {'// …and it composes — all of it just CSS'}
         </span>
       </div>
