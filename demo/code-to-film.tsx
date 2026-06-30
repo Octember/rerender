@@ -125,7 +125,6 @@ export function CodeToFilm(): JSX.Element {
   // kinetic closer — the lines spring in staggered, the punchline biggest + last
   const tSpring = (d: number): number => Math.max(0, spring({ frame: frame - d, fps, config: { damping: 13, stiffness: 110 } }));
   const t1 = tSpring(T.film + 12);
-  const t2 = tSpring(T.film + 22);
   const t3 = seg(T.film + 36, T.film + 52);
   const flash = seg(T.grow + 14, T.grow + 24, 0, 0.92) * seg(T.grow + 24, T.grow + 56, 1, 0); // bloom-burst as the card opens into the film
   // a FIXED overscan — deliberately NOT animated. An ancestor scale that changes every frame forces
@@ -385,31 +384,17 @@ export function CodeToFilm(): JSX.Element {
           <div style={{ textAlign: 'center' }}>
             <div
               style={{
-                fontSize: 34,
-                fontWeight: 700,
-                letterSpacing: -0.5,
-                color: 'rgba(255,255,255,0.92)',
-                opacity: t1,
-                transform: `translateY(${interpolate(t1, [0, 1], [22, 0])}px)`,
-                textShadow: '0 6px 30px rgba(0,0,0,0.8)',
-                marginBottom: 6,
-              }}
-            >
-              This is one React component.
-            </div>
-            <div
-              style={{
                 fontSize: 72,
                 fontWeight: 850,
                 lineHeight: 1.0,
                 letterSpacing: -2,
                 color: '#ff6f9d',
-                opacity: t2,
-                transform: `translateY(${interpolate(t2, [0, 1], [30, 0])}px) scale(${interpolate(t2, [0, 1], [0.94, 1])})`,
+                opacity: t1,
+                transform: `translateY(${interpolate(t1, [0, 1], [30, 0])}px) scale(${interpolate(t1, [0, 1], [0.94, 1])})`,
                 textShadow: '0 10px 50px rgba(255,94,138,0.45), 0 4px 20px rgba(0,0,0,0.6)',
               }}
             >
-              Now it's an MP4.
+              This is a React component.
             </div>
             <div style={{ marginTop: 18, fontFamily: MONO, fontSize: 15, color: 'rgba(255,255,255,0.66)', letterSpacing: 1, opacity: t3 }}>
               in your browser · no server · no ffmpeg
