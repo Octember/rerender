@@ -388,7 +388,7 @@ export function CodeToFilm(): JSX.Element {
                 textShadow: '0 10px 50px rgba(255,94,138,0.45), 0 4px 20px rgba(0,0,0,0.6)',
               }}
             >
-              It rendered itself to MP4.
+              Now it's an MP4.
             </div>
             <div style={{ marginTop: 18, fontFamily: MONO, fontSize: 15, color: 'rgba(255,255,255,0.66)', letterSpacing: 1, opacity: t3 }}>
               in your browser · no server · no ffmpeg
