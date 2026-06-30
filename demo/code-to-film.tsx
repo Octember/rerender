@@ -113,20 +113,16 @@ export function CodeToFilm(): JSX.Element {
   const heroW = key([T.grow, T.grow + GROW_SPAN], [244, 1280]);
   const heroH = key([T.grow, T.grow + GROW_SPAN], [244, 720]);
   const heroRadius = key([T.round, T.round + MORPH, T.grow, T.grow + GROW_SPAN], [2, 28, 28, 0]);
-  // Settles to 0.04deg, not exactly 0 — same trick as the <video>'s own rotate(0.04deg) in
-  // primitives.tsx. A continuous scale-push (below) under a PERFECTLY axis-aligned ancestor is a
-  // hardware-video-overlay-snap shake risk, the same mechanism that trick was built for; this is the
-  // wrapper-level version of it, live-playback only (a frame-stepped export can't reproduce or
-  // verify this class of bug — see the original shake investigation earlier this project).
-  const heroRot = key([T.tilt, T.tilt + MORPH, T.grow - 44, T.grow - 24], [0, -10, -10, 0.04]);
+  const heroRot = key([T.tilt, T.tilt + MORPH, T.grow - 44, T.grow - 24], [0, -10, -10, 0]);
   const heroBorderA = seg(T.pop + 8, T.pop + 28) * seg(T.grow - 2, T.grow + 22, 1, 0);
   const heroShadow = seg(T.lift, T.lift + MORPH) * seg(T.grow - 2, T.grow + 26, 1, 0);
   const faceFade = seg(T.fill, T.fill + MORPH) * seg(T.grow + 4, T.grow + 52, 1, 0); // gradient FACE fades to reveal the footage
-  // the soft settle as it reaches centre, PLUS a continuous slow push that runs all the way to the
-  // last frame — kept running (the zoom must not stop short of the end); the heroRot tilt above is
-  // what keeps it from jittering, not truncating or freezing this value.
-  const heroScale =
-    heroPop * key([T.compose + 6, T.compose + 22, T.compose + 36], [1, 1.1, 1]) * key([T.grow + GROW_SPAN, last], [1, 1.08]);
+  // NO continuous push during the film act. Three rounds tried to keep one alive (plain, with a
+  // persistent wrapper tilt, ...) and every variant produced a different complaint (shake, then
+  // "zooms out weirdly") once the title was on screen — the push itself is the common factor across
+  // all of them. Cutting it for good: the hero (and the video inside it) is a flat, non-animating
+  // scale once it's grown to full screen. No zoom motion beats jittery/weird zoom motion.
+  const heroScale = heroPop * key([T.compose + 6, T.compose + 22, T.compose + 36], [1, 1.1, 1]);
 
   const codeOp = seg(T.pop - 4, T.pop + 6) * seg(T.compose, T.compose + 16, 1, 0);
   const codeCursor = LINES.reduce((a, l, i) => (frame >= l.f ? i : a), -1); // line currently "typing"
