@@ -127,10 +127,12 @@ export function CodeToFilm(): JSX.Element {
   const glowOp = seg(T.compose + 14, T.compose + 34) * seg(T.grow - 6, T.grow + 30, 1, 0);
   const grade = seg(T.grow + 44, T.grow + 74) * 0.32;
   const gradeHue = key([T.grow + 44, last], [330, 268]);
-  // kinetic closer — the lines spring in staggered, the punchline biggest + last
-  const tSpring = (d: number): number => Math.max(0, spring({ frame: frame - d, fps, config: { damping: 13, stiffness: 110 } }));
-  const t1 = tSpring(T.film + 12);
-  const t3 = seg(T.film + 36, T.film + 52);
+  // the punchline — softer/less snappy than the build's springs (damping17 vs 11-13 elsewhere) and
+  // starting only 6 frames after the grade finishes (was 12) so it reads as a continuation of the
+  // reveal's motion rather than "everything stops, then the title suddenly snaps in"
+  const tSpring = (d: number): number => Math.max(0, spring({ frame: frame - d, fps, config: { damping: 17, stiffness: 110 } }));
+  const t1 = tSpring(T.film + 6);
+  const t3 = seg(T.film + 30, T.film + 46);
   const flash = seg(T.grow + 14, T.grow + 24, 0, 0.92) * seg(T.grow + 24, T.grow + 56, 1, 0); // bloom-burst as the card opens into the film
   // the title holds fully settled, then the whole scene fades to black over the final 24 frames —
   // so the loop's jump back to frame 0 (also near-black) reads as a clean cut, not a jarring one

@@ -148,6 +148,13 @@ export function Video({
     if (!v) return;
     const target = sourceFrameAt(frame, offset, playbackRate, trimAfter) / fps;
     if (playing) {
+      const dur = v.duration;
+      // A composition may want a clip on screen LONGER than the source footage itself (e.g. a 4s
+      // b-roll loop behind a longer scene). Once `target` runs past the video's own native duration,
+      // stop touching the element entirely — repeatedly calling play()/reseeking toward an
+      // ever-growing target past `duration` is what produces a visible stutter right at the clip's
+      // natural end. Left alone, the browser's normal end-of-playback behavior holds the last frame.
+      if (Number.isFinite(dur) && dur > 0 && target >= dur) return;
       v.playbackRate = playbackRate;
       if (v.paused) void v.play().catch(() => undefined);
       if (Math.abs(v.currentTime - target) > 0.3) v.currentTime = target; // correct drift
