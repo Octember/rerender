@@ -29,6 +29,8 @@
     "studio": "tsx src/cli.ts studio",
     "dev": "vite",
     "build": "vite build",
+    "test": "vite build && tsx test/export.test.ts",
+    "test:export": "tsx test/export.test.ts",
     "typecheck": "tsc --noEmit",
     "lint": "biome lint .",
     "format": "biome check --write .",
