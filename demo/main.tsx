@@ -15,25 +15,9 @@ createRoot(root).render(
       button { font-family: inherit }
     `}</style>
     <div style={{ maxWidth: 1080, margin: '0 auto', padding: '40px 28px 80px' }}>
-      <header
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 54, gap: 16, flexWrap: 'wrap' }}
-      >
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
-          <span style={{ fontSize: 22, fontWeight: 800, letterSpacing: -0.5 }}>rerender</span>
-          <span style={{ fontSize: 13, color: '#8a8a99' }}>a drop-in, MIT-licensed Remotion alternative</span>
-        </div>
-        <span
-          style={{
-            fontFamily: 'ui-monospace, monospace',
-            fontSize: 12,
-            color: '#6a6a76',
-            border: '1px solid #26262e',
-            borderRadius: 999,
-            padding: '6px 12px',
-          }}
-        >
-          render = a recording of the preview
-        </span>
+      <header style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 54, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 22, fontWeight: 800, letterSpacing: -0.5 }}>rerender</span>
+        <span style={{ fontSize: 13, color: '#8a8a99' }}>a drop-in, MIT-licensed Remotion alternative</span>
       </header>
 
       <section style={{ marginBottom: 36 }}>
@@ -60,25 +44,9 @@ createRoot(root).render(
 
       <ExportShowcase />
 
-      <footer
-        style={{
-          marginTop: 64,
-          paddingTop: 24,
-          borderTop: '1px solid #1d1d25',
-          color: '#6a6a76',
-          fontSize: 13,
-          display: 'flex',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: 12,
-        }}
-      >
-        <span>WebCodecs · mediabunny · React · foreignObject capture</span>
-        <span>same engine renders headless &amp; on AWS Lambda — this is just the no-server path</span>
-        <span style={{ flexBasis: '100%', color: '#55555f', fontSize: 12, lineHeight: 1.5, marginTop: 4 }}>
-          Independent open-source project — not affiliated with, endorsed by, or sponsored by Remotion or Remotion Inc.
-          &ldquo;Remotion&rdquo; is a trademark of its respective owner; used here only to describe API compatibility.
-        </span>
+      <footer style={{ marginTop: 64, paddingTop: 24, borderTop: '1px solid #1d1d25', color: '#55555f', fontSize: 12, lineHeight: 1.5 }}>
+        Independent open-source project — not affiliated with, endorsed by, or sponsored by Remotion or Remotion Inc. &ldquo;Remotion&rdquo;
+        is a trademark of its respective owner; used here only to describe API compatibility.
       </footer>
     </div>
   </>,
