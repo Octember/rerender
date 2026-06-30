@@ -233,12 +233,12 @@ function CompatMatrix(): JSX.Element {
 
 // ── us vs them ──
 const VS: { label: string; remotion: string; rerender: string }[] = [
-  { label: 'Cost per render', remotion: '~1¢ cloud usage fee', rerender: '$0' },
-  { label: 'Infrastructure', remotion: 'AWS Lambda, tightly coupled', rerender: 'your browser — or any static host' },
-  { label: 'Video encoder', remotion: 'bundled ffmpeg — a native binary per OS/arch', rerender: 'WebCodecs + WASM, no binary' },
-  { label: 'To render a video', remotion: 'deploy + run a cloud render farm', rerender: 'click a button' },
-  { label: 'Works offline', remotion: 'no — needs the cloud function', rerender: 'yes (encode is fully local)' },
-  { label: 'License', remotion: 'per-seat, with no-compete clauses', rerender: 'MIT' },
+  { label: 'License', remotion: 'Paid company license above 3 employees', rerender: 'MIT — free, no seats, no restrictions' },
+  { label: 'Source', remotion: 'Source-available, license-gated', rerender: 'Fully open source' },
+  { label: 'Render in the browser', remotion: 'Experimental (@remotion/web-renderer)', rerender: 'Yes — what this page just did' },
+  { label: 'Distributed / farm render', remotion: 'AWS Lambda only', rerender: 'Any host — or your own Firecracker' },
+  { label: 'To render with no cloud', remotion: 'Node + headless Chrome + an ffmpeg binary', rerender: 'a browser tab' },
+  { label: 'Drop-in API', remotion: 'the original', rerender: 'same API — swap the import' },
 ];
 
 function VsTable(): JSX.Element {

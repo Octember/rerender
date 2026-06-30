@@ -33,8 +33,8 @@ createRoot(root).render(
           </span>
         </h1>
         <p style={{ fontSize: 19, color: '#9a9aa6', maxWidth: 660, lineHeight: 1.55, margin: 0 }}>
-          The composition plays in real DOM with arbitrary CSS. One click frame-steps it, captures every frame straight from the page, and
-          encodes an MP4 with WebCodecs + WASM — all in this tab. The thing Remotion needs a cloud render farm and a bundled ffmpeg for.
+          It's the same React you'd write in Remotion — real DOM, real CSS. One click frame-steps the composition, captures each frame from
+          the page, and encodes an MP4 with WebCodecs, right here in this tab. No server, no native ffmpeg, no render farm to stand up.
         </p>
       </section>
 
