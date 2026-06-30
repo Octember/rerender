@@ -14,8 +14,7 @@ const H = 720;
 const FPS = 30;
 const DUR = CODE_TO_FILM_DURATION; // single source of truth — the comp owns its own length
 const ACCENT = '#ff5e8a';
-const DISPLAY_W = 468;
-const DISPLAY_H = Math.round((DISPLAY_W * H) / W); // whole px → integer container box, one fewer fractional snap
+const DISPLAY_W = 468; // the hero's pre-measure fallback width basis
 
 const card: CSSProperties = { background: '#0f0f15', border: '1px solid #23232c', borderRadius: 14, overflow: 'hidden' };
 const bigStat: CSSProperties = {
@@ -342,12 +341,10 @@ export function ExportShowcase(): JSX.Element {
   const [status, setStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
   const [pct, setPct] = useState(0);
   const [frameNo, setFrameNo] = useState(0);
-  const [strip, setStrip] = useState<string[]>([]);
   const [url, setUrl] = useState<string | null>(null);
   const [meta, setMeta] = useState<{ secs: string; size: string } | null>(null);
   const [downloaded, setDownloaded] = useState(false);
   const [err, setErr] = useState('');
-  const liveCanvas = useRef<HTMLCanvasElement>(null);
   const player = useRef<PlayerRef>(null);
 
   useEffect(() => {
@@ -364,31 +361,22 @@ export function ExportShowcase(): JSX.Element {
     setStatus('running');
     setPct(0);
     setFrameNo(0);
-    setStrip([]);
     setUrl(null);
     setDownloaded(false);
     setErr('');
-    const thumbs: string[] = [];
     const t0 = performance.now();
+    // ~40 progress repaints, not one per frame: re-rendering the showcase every frame contends with
+    // the export's own render loop on the main thread and measurably slows the export itself. We also
+    // don't paint the frames anywhere during the render — there's nothing to watch, it just gets fast.
+    const step = Math.max(1, Math.round(DUR / 40));
     try {
       const blob = await exportToMp4({
         Component: CodeToFilm as ComponentType<Record<string, unknown>>,
         config: { width: W, height: H, fps: FPS, durationInFrames: DUR },
         onProgress: (done) => {
-          setPct(Math.round((done / DUR) * 100));
-          setFrameNo(done);
-        },
-        onFrame: (canvas, f) => {
-          const lc = liveCanvas.current;
-          const lctx = lc?.getContext('2d');
-          if (lc && lctx) lctx.drawImage(canvas, 0, 0, lc.width, lc.height);
-          if (f % 9 === 0) {
-            const tc = document.createElement('canvas');
-            tc.width = 104;
-            tc.height = 58;
-            tc.getContext('2d')?.drawImage(canvas, 0, 0, 104, 58);
-            thumbs.push(tc.toDataURL('image/jpeg', 0.6));
-            setStrip([...thumbs]);
+          if (done % step === 0 || done === DUR) {
+            setPct(Math.round((done / DUR) * 100));
+            setFrameNo(done);
           }
         },
       });
@@ -487,28 +475,14 @@ export function ExportShowcase(): JSX.Element {
               }}
             >
               {status === 'running' && (
-                <>
-                  <canvas ref={liveCanvas} width={DISPLAY_W} height={DISPLAY_H} style={{ width: '100%', height: '100%', display: 'block' }} />
-                  <div
-                    style={{
-                      position: 'absolute',
-                      inset: 0,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'flex-end',
-                      paddingBottom: 12,
-                      background: 'linear-gradient(to top, rgba(0,0,0,0.6), transparent 40%)',
-                    }}
-                  >
-                    <div style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12, color: '#fff', marginBottom: 7 }}>
-                      capturing frame {frameNo} / {DUR}
-                    </div>
-                    <div style={{ width: '82%', height: 5, background: 'rgba(255,255,255,0.15)', borderRadius: 999, overflow: 'hidden' }}>
-                      <div style={{ width: `${pct}%`, height: '100%', background: `linear-gradient(90deg,${ACCENT},#ffa14a)` }} />
-                    </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24, width: '100%' }}>
+                  <div style={{ fontFamily: 'ui-monospace, monospace', fontSize: 13, color: '#fff' }}>
+                    encoding frame {frameNo} / {DUR}
                   </div>
-                </>
+                  <div style={{ width: '80%', height: 6, background: 'rgba(255,255,255,0.15)', borderRadius: 999, overflow: 'hidden' }}>
+                    <div style={{ width: `${pct}%`, height: '100%', background: `linear-gradient(90deg,${ACCENT},#ffa14a)`, transition: 'width 0.15s linear' }} />
+                  </div>
+                </div>
               )}
               {status === 'done' && url && (
                 // biome-ignore lint/a11y/useMediaCaption: a generated demo clip, no captions
@@ -551,28 +525,6 @@ export function ExportShowcase(): JSX.Element {
               </div>
             </div>
           )}
-        </div>
-      )}
-
-      {/* filmstrip of captured frames */}
-      {strip.length > 0 && (
-        <div style={{ marginTop: 24 }}>
-          <div style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11, color: '#6a6a76', letterSpacing: 1, marginBottom: 8 }}>
-            FRAMES CAPTURED FROM THE LIVE DOM →
-          </div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {strip.map((src, i) => (
-              // biome-ignore lint/a11y/useAltText: decorative filmstrip thumbnail
-              // biome-ignore lint/suspicious/noArrayIndexKey: frames are append-only and ordered
-              <img
-                key={i}
-                src={src}
-                width={104}
-                height={58}
-                style={{ borderRadius: 5, border: '1px solid #26262e', opacity: 0, animation: `fadein .3s ease ${i * 0.02}s forwards` }}
-              />
-            ))}
-          </div>
         </div>
       )}
 
