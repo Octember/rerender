@@ -100,14 +100,6 @@ export function CodeToFilm(): JSX.Element {
   // ── hero card: built (Act 1, center-right) → centers for the grid (Act 2) → grows into the
   //    full-frame screen with the footage revealed inside it (Act 3) ──
   const heroPop = Math.max(0, spring({ frame: frame - T.pop, fps, config: { damping: 11, stiffness: 130 } }));
-  // the square reacts to each CSS property landing — a little overshoot of life (secondary motion)
-  const bump = (at: number, amp = 0.06): number => {
-    const x = (frame - at) / 7;
-    return x > 0 && x < 1 ? Math.sin(x * Math.PI) * amp : 0;
-  };
-  // a gentle bob runs the whole build so the long property holds never sit dead-static, settling
-  // just before it grows into the screen
-  const heroFloat = Math.sin(ph * 2.3) * 6 * seg(T.pop + 30, T.pop + 60) * seg(T.grow - 26, T.grow - 10, 1, 0);
   const heroX = key([T.compose, T.compose + 24], [772, 640]);
   const heroW = key([T.grow, T.grow + 40], [244, 1280]);
   const heroH = key([T.grow, T.grow + 40], [244, 720]);
@@ -116,11 +108,8 @@ export function CodeToFilm(): JSX.Element {
   const heroBorderA = seg(T.pop + 12, T.pop + 40) * seg(T.grow - 2, T.grow + 16, 1, 0);
   const heroShadow = seg(T.lift, T.lift + MORPH) * seg(T.grow - 2, T.grow + 20, 1, 0);
   const faceFade = seg(T.fill, T.fill + MORPH) * seg(T.grow, T.grow + 28, 1, 0); // gradient FACE fades to reveal the footage
-  const heroScale =
-    heroPop *
-    (1 + bump(T.round) + bump(T.tilt) + bump(T.lift) + bump(T.fill) + bump(T.grow + 38, 0.05)) *
-    key([T.compose + 6, T.compose + 22, T.compose + 36], [1, 1.1, 1]) *
-    key([T.grow + 40, last], [1, 1.08]);
+  // only deliberate scale moves remain: a soft settle as it reaches centre, and a slow push on the film
+  const heroScale = heroPop * key([T.compose + 6, T.compose + 22, T.compose + 36], [1, 1.1, 1]) * key([T.grow + 40, last], [1, 1.08]);
 
   const codeOp = seg(T.pop - 4, T.pop + 6) * seg(T.compose, T.compose + 16, 1, 0);
   const codeCursor = LINES.reduce((a, l, i) => (frame >= l.f ? i : a), -1); // line currently "typing"
@@ -134,16 +123,13 @@ export function CodeToFilm(): JSX.Element {
   const t2 = tSpring(T.film + 22);
   const t3 = seg(T.film + 36, T.film + 52);
   const flash = seg(T.grow + 6, T.grow + 13, 0, 0.92) * seg(T.grow + 13, T.grow + 32, 1, 0); // bloom-burst as the card opens into the film
-  // a gentle hand-held camera over the whole scene — it always feels SHOT, never static. Keep a
-  // constant slight overscan (>=2.5%) so the drift never reveals a black edge on the full-frame film.
-  const camX = Math.sin(ph * 0.28) * 6 + Math.sin(ph * 0.9) * 1.2;
-  const camY = Math.cos(ph * 0.22) * 4;
+  // a slow, steady push on the whole scene — no hand-held drift; the build must read rock-still
   const camZoom = 1.025 + seg(0, T.grow - 2, 0, 0.012);
 
   return (
     <AbsoluteFill style={{ fontFamily: SANS, overflow: 'hidden' }}>
       {/* CAMERA — a gentle drift + push over the whole scene (HUD/progress stay pinned outside) */}
-      <AbsoluteFill style={{ transform: `scale(${camZoom}) translate(${camX}px, ${camY}px)`, transformOrigin: '50% 50%' }}>
+      <AbsoluteFill style={{ transform: `scale(${camZoom})`, transformOrigin: '50% 50%' }}>
         {/* atmospheric backdrop for the build/grid (deep indigo, not flat black) — fades out before
           the footage reveals, since the export composites any non-video layer ON TOP of the video */}
         <AbsoluteFill
@@ -159,12 +145,12 @@ export function CodeToFilm(): JSX.Element {
         />
 
         {/* THE DESIGN LANGUAGE — a labeled grid of styled divs that fly out of the hero with 3D depth */}
-        {GRID.map((c, i) => {
+        {GRID.map((c) => {
           const order = Math.abs(c.dx) + Math.abs(c.dy); // assemble from the centre outward
           const pop = Math.max(0, spring({ frame: frame - (T.compose + 16 + (order / G) * 6), fps, config: { damping: 13, stiffness: 130 } }));
           const spread = pop * (1 + (1 - gridIn) * 2.2); // fly OUT of the hero, then explode outward as it opens
           const cx = 640 + c.dx * spread;
-          const cy = 360 + c.dy * spread + Math.sin(ph * 0.8 + i) * 6 * gridIn;
+          const cy = 360 + c.dy * spread;
           const ry = (c.dx / G) * -13; // perspective depth — the grid faces the camera like a wall
           return (
             <div
@@ -218,7 +204,7 @@ export function CodeToFilm(): JSX.Element {
           style={{
             position: 'absolute',
             left: heroX,
-            top: 360 + heroFloat,
+            top: 360,
             width: heroW,
             height: heroH,
             marginLeft: -heroW / 2,
@@ -228,11 +214,25 @@ export function CodeToFilm(): JSX.Element {
             boxShadow: `0 40px 120px rgba(255,94,138,${heroShadow * 0.5})`,
           }}
         >
-          {/* the footage — bottom layer, rounded to the card via the renderer's border-radius clip */}
+          {/* the footage — bottom layer, rounded to the card via the renderer's border-radius clip.
+            Held on its first frame until the reveal (T.grow) so it never plays — and never jitters —
+            behind the still-transparent square during the slow build; it comes alive as the card opens. */}
           <Video
             src={staticFile('demo-clip.mp4')}
-            trimBefore={-140}
+            trimBefore={-T.grow}
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', borderRadius: heroRadius }}
+          />
+          {/* opaque panel that hides the footage through the whole build so it never shimmers behind
+            the still-transparent square — the card reads as a clean dark surface, then peels away at
+            the reveal (with the gradient face) to show the live video underneath */}
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              borderRadius: heroRadius,
+              background: 'linear-gradient(135deg,#15111f,#0b0910)',
+              opacity: seg(T.grow, T.grow + 28, 1, 0),
+            }}
           />
           <div
             style={{
