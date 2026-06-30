@@ -73,7 +73,7 @@ function useNarrow(maxWidth = 640): boolean {
   return narrow;
 }
 
-// ── CSS reveal: the actual Orb component, so it's obvious the visuals are real DOM/CSS ──
+// ── CSS reveal: the actual style object behind one grid cell, so it's obvious the visuals are real DOM/CSS ──
 function CssReveal(): JSX.Element {
   const k: CSSProperties = { color: '#c678dd' }; // keyword
   const f: CSSProperties = { color: '#61afef' }; // function/name
@@ -98,20 +98,16 @@ function CssReveal(): JSX.Element {
           overflowX: 'auto',
         }}
       >
-        <span style={k}>function</span> <span style={f}>Orb</span>(<span style={{ color: '#e06c75' }}>{'{ hue, size }'}</span>) {'{'}
-        {'\n'} <span style={k}>return</span> ({'\n'} <span style={d}>&lt;</span>
+        <span style={d}>&lt;</span>
         <span style={f}>div</span> <span style={{ color: '#d19a66' }}>style</span>={'{{'}
-        {'\n'} <span style={{ color: '#d19a66' }}>width</span>: size, <span style={{ color: '#d19a66' }}>height</span>: size,{' '}
-        <span style={{ color: '#d19a66' }}>borderRadius</span>: <span style={s}>'50%'</span>,{'\n'}{' '}
+        {'\n'} <span style={{ color: '#d19a66' }}>width</span>: <span style={s}>138</span>, <span style={{ color: '#d19a66' }}>height</span>:{' '}
+        <span style={s}>138</span>, <span style={{ color: '#d19a66' }}>borderRadius</span>: <span style={s}>'50%'</span>,{'\n'}{' '}
         <span style={{ background: 'rgba(255,94,138,0.14)', borderRadius: 4, padding: '1px 3px' }}>
-          <span style={{ color: '#d19a66' }}>background</span>: <span style={s}>{'`radial-gradient(circle at 35% 30%,'}</span>
-          {'\n'} <span style={s}>{'  hsla(${hue}, 92%, 68%, .85),'}</span>
-          {'\n'} <span style={s}>{'  hsla(${hue}, 92%, 55%, 0) 70%)`'}</span>
+          <span style={{ color: '#d19a66' }}>background</span>:{' '}
+          <span style={s}>{"'radial-gradient(circle at 38% 32%,'"}</span>
+          {'\n'} <span style={s}>{"  '#ffe08a, #ff5e8a 72%)'"}</span>
         </span>
         ,{'\n'} {'}}'} <span style={d}>/&gt;</span>
-        {'\n'} );
-        {'\n'}
-        {'}'}
       </pre>
     </div>
   );
