@@ -20,7 +20,7 @@ createRoot(root).render(
       >
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
           <span style={{ fontSize: 22, fontWeight: 800, letterSpacing: -0.5 }}>rerender</span>
-          <span style={{ fontSize: 13, color: '#8a8a99' }}>a drop-in, MIT Remotion</span>
+          <span style={{ fontSize: 13, color: '#8a8a99' }}>a drop-in, MIT-licensed Remotion alternative</span>
         </div>
         <span
           style={{
@@ -75,6 +75,10 @@ createRoot(root).render(
       >
         <span>WebCodecs · mediabunny · React · foreignObject capture</span>
         <span>same engine renders headless &amp; on AWS Lambda — this is just the no-server path</span>
+        <span style={{ flexBasis: '100%', color: '#55555f', fontSize: 12, lineHeight: 1.5, marginTop: 4 }}>
+          Independent open-source project — not affiliated with, endorsed by, or sponsored by Remotion or Remotion Inc.
+          &ldquo;Remotion&rdquo; is a trademark of its respective owner; used here only to describe API compatibility.
+        </span>
       </footer>
     </div>
   </>,

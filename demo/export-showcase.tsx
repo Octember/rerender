@@ -36,6 +36,8 @@ const cardLabel: CSSProperties = {
   borderBottom: '1px solid #1d1d25',
   display: 'flex',
   justifyContent: 'space-between',
+  gap: 8,
+  flexWrap: 'wrap',
 };
 
 function Badge({ icon, children }: { icon: string; children: React.ReactNode }): JSX.Element {
@@ -59,6 +61,19 @@ function Badge({ icon, children }: { icon: string; children: React.ReactNode }):
   );
 }
 
+/** True on narrow (phone) viewports — drives the tables' stacked mobile layout. */
+function useNarrow(maxWidth = 640): boolean {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${maxWidth}px)`);
+    const on = (): void => setNarrow(mq.matches);
+    on();
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, [maxWidth]);
+  return narrow;
+}
+
 // ── CSS reveal: the actual Orb component, so it's obvious the visuals are real DOM/CSS ──
 function CssReveal(): JSX.Element {
   const k: CSSProperties = { color: '#c678dd' }; // keyword
@@ -67,9 +82,10 @@ function CssReveal(): JSX.Element {
   const d: CSSProperties = { color: '#5c6370' }; // dim
   return (
     <div style={{ marginTop: 30 }}>
-      <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>Those glowing circles? Each is one styled &lt;div&gt;.</div>
+      <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>Every shape in that film is one styled &lt;div&gt;.</div>
       <div style={{ color: '#8a8a99', fontSize: 14, marginBottom: 14, maxWidth: 720 }}>
-        No canvas drawing, no shader — just CSS the renderer rasterizes straight into the mp4. This is the exact code behind them:
+        No canvas drawing, no shader — just CSS the renderer rasterizes straight into the mp4. The radial-gradient tile in the grid, for
+        one:
       </div>
       <pre
         style={{
@@ -227,6 +243,34 @@ const VS: { label: string; remotion: string; rerender: string }[] = [
 ];
 
 function VsTable(): JSX.Element {
+  const narrow = useNarrow();
+  if (narrow) {
+    // Stacked cards on phones — rerender first/highlighted, no sideways scroll.
+    return (
+      <div style={{ marginTop: 30 }}>
+        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 14 }}>
+          rerender <span style={{ color: '#6a6a76' }}>vs</span> Remotion
+        </div>
+        <div style={{ display: 'grid', gap: 10 }}>
+          {VS.map((r) => (
+            <div key={r.label} style={{ ...card, padding: '14px 16px' }}>
+              <div style={{ color: '#8a8a99', fontWeight: 600, fontSize: 12.5, letterSpacing: 0.3, marginBottom: 10 }}>{r.label}</div>
+              <div style={{ display: 'flex', gap: 9, marginBottom: 7 }}>
+                <span style={{ color: '#7fdca0' }}>✓</span>
+                <span style={{ color: '#fff', flex: 1, fontSize: 14 }}>
+                  <b style={{ color: ACCENT }}>rerender</b> — {r.rerender}
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 9 }}>
+                <span style={{ color: '#ff8080' }}>✕</span>
+                <span style={{ color: '#9a9aa6', flex: 1, fontSize: 14 }}>Remotion — {r.remotion}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
   return (
     <div style={{ marginTop: 30 }}>
       <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 14 }}>
@@ -275,7 +319,28 @@ function VsTable(): JSX.Element {
   );
 }
 
+const GAP = 20;
+
+/** Responsive split: two cards side by side on wide screens, stacked + scaled to fit on mobile. */
+function useCardLayout(): { ref: React.RefObject<HTMLDivElement>; cardW: number; displayH: number } {
+  const ref = useRef<HTMLDivElement>(null);
+  const [w, setW] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const update = (): void => setW(el.clientWidth);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const stacked = w > 0 && w < 620; // two readable cards no longer fit side by side
+  const cardW = w === 0 ? DISPLAY_W : Math.min(DISPLAY_W, stacked ? w : (w - GAP) / 2);
+  return { ref, cardW, displayH: Math.round((cardW * H) / W) };
+}
+
 export function ExportShowcase(): JSX.Element {
+  const { ref: splitRef, cardW, displayH } = useCardLayout();
   const [status, setStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
   const [pct, setPct] = useState(0);
   const [frameNo, setFrameNo] = useState(0);
@@ -339,8 +404,8 @@ export function ExportShowcase(): JSX.Element {
   return (
     <div>
       {/* the split: live composition ↔ the exported file */}
-      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-        <div style={{ ...card, width: DISPLAY_W }}>
+      <div ref={splitRef} style={{ display: 'flex', gap: GAP, flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'center' }}>
+        <div style={{ ...card, width: cardW }}>
           <div style={cardLabel}>
             <span>● LIVE · REACT COMPOSITION</span>
             <span style={{ color: ACCENT }}>useCurrentFrame()</span>
@@ -352,13 +417,13 @@ export function ExportShowcase(): JSX.Element {
             height={H}
             fps={FPS}
             durationInFrames={DUR}
-            displayHeight={DISPLAY_H}
+            displayHeight={displayH}
             controls={false}
             style={{ display: 'block' }}
           />
         </div>
 
-        <div style={{ ...card, width: DISPLAY_W }}>
+        <div style={{ ...card, width: cardW }}>
           <div style={cardLabel}>
             <span style={{ color: status === 'done' ? '#7fdca0' : '#8a8a99' }}>
               {status === 'done' ? '▸ THE .MP4 · DECODED BY YOUR BROWSER' : 'OUTPUT · .MP4'}
@@ -367,8 +432,8 @@ export function ExportShowcase(): JSX.Element {
           </div>
           <div
             style={{
-              width: DISPLAY_W,
-              height: DISPLAY_H,
+              width: cardW,
+              height: displayH,
               background: '#000',
               position: 'relative',
               display: 'flex',
