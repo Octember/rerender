@@ -78,9 +78,7 @@ export interface PlayerProps {
   acknowledgeRemotionLicense?: boolean;
 }
 
-// Clamp to [0, last] but do NOT round — playback commits a continuous (fractional) frame for
-// smooth motion; seekTo passes an integer, which clamps through unchanged.
-const clampFrame = (f: number, durationInFrames: number): number => Math.max(0, Math.min(durationInFrames - 1, f));
+const clampFrame = (f: number, durationInFrames: number): number => Math.max(0, Math.min(durationInFrames - 1, Math.round(f)));
 
 export const Player = forwardRef<PlayerRef, PlayerProps>(function Player(props, ref): JSX.Element {
   const {
@@ -129,10 +127,9 @@ export const Player = forwardRef<PlayerRef, PlayerProps>(function Player(props, 
     (f: number, seeked = false): void => {
       const clamped = clampFrame(f, durationInFrames);
       frameRef.current = clamped;
-      setFrameState(clamped); // may be fractional during playback → smooth motion
-      // The imperative API stays integer (consumers like an editor's playhead expect whole frames).
-      emit('frameupdate', { frame: Math.round(clamped) });
-      if (seeked) emit('seeked', { frame: Math.round(clamped) });
+      setFrameState(clamped);
+      emit('frameupdate', { frame: clamped });
+      if (seeked) emit('seeked', { frame: clamped });
     },
     [durationInFrames, emit],
   );
@@ -153,15 +150,18 @@ export const Player = forwardRef<PlayerRef, PlayerProps>(function Player(props, 
     let anchor = { t: performance.now(), f: frameRef.current >= durationInFrames - 1 ? 0 : frameRef.current };
     const tick = (): void => {
       const elapsed = (performance.now() - anchor.t) / 1000;
-      // Continuous (un-floored) frame during live playback: the composition interpolates
-      // smoothly in lockstep with the natively-playing <video>, instead of stepping at fps
-      // while the footage flows (which reads as shake). The renderer still uses integer frames,
-      // so the export stays frame-exact.
-      let f = anchor.f + elapsed * fps * playbackRate;
-      if (f >= durationInFrames) {
+      // Commit only WHOLE frames during playback, like @remotion/player's floored clock. The rAF
+      // fires ~60x/s but we re-render the React tree (and thus re-evaluate the Ken Burns transform
+      // on the <video>) only when the integer frame changes — i.e. at fps. A live <video> is a
+      // compositor layer that the GPU presents snapped to integer device pixels; re-snapping it
+      // 60x/s under a continuously-changing effective scale is exactly what reads as shake. The
+      // footage still plays continuously via the native <video>; only the React-driven transforms
+      // step at fps — the same cadence the (smooth) export uses.
+      const raw = anchor.f + elapsed * fps * playbackRate;
+      if (raw >= durationInFrames) {
         if (loop) {
-          f = 0;
           anchor = { t: performance.now(), f: 0 };
+          commitFrame(0);
         } else {
           commitFrame(durationInFrames - 1);
           setPlaying(false);
@@ -169,8 +169,10 @@ export const Player = forwardRef<PlayerRef, PlayerProps>(function Player(props, 
           if (moveToBeginningWhenEnded) commitFrame(0);
           return;
         }
+      } else {
+        const next = Math.floor(raw);
+        if (next !== frameRef.current) commitFrame(next);
       }
-      commitFrame(f);
       rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
@@ -184,7 +186,7 @@ export const Player = forwardRef<PlayerRef, PlayerProps>(function Player(props, 
         setPlaying(false);
         commitFrame(f, true);
       },
-      getCurrentFrame: () => Math.round(frameRef.current),
+      getCurrentFrame: () => frameRef.current,
       play: () => setPlaying(true),
       pause: () => setPlaying(false),
       pauseAndReturnToPlayStart: () => {
@@ -247,10 +249,9 @@ export const Player = forwardRef<PlayerRef, PlayerProps>(function Player(props, 
             position: 'absolute',
             top: 0,
             left: 0,
-            // Promote the composition to its own GPU layer so it's rasterized at native
-            // resolution and scaled continuously — without this the down-scale re-rasterizes
-            // every frame and quantizes motion (esp. the <Video>) to device pixels: visible shake.
-            willChange: 'transform',
+            // No willChange here. @remotion/player sets none, and forcing this div to a GPU layer
+            // made the descendant <video> a NESTED promoted layer — a second integer-snap seam
+            // that compounds the Ken Burns shake rather than fixing it.
           }}
         >
           <ConfigContext.Provider value={config}>

@@ -15,7 +15,7 @@ const FPS = 30;
 const DUR = 90;
 const ACCENT = '#ff5e8a';
 const DISPLAY_W = 468;
-const DISPLAY_H = (DISPLAY_W * H) / W;
+const DISPLAY_H = Math.round((DISPLAY_W * H) / W); // whole px → integer container box, one fewer fractional snap
 
 const card: CSSProperties = { background: '#0f0f15', border: '1px solid #23232c', borderRadius: 14, overflow: 'hidden' };
 const bigStat: CSSProperties = {

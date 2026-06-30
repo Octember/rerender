@@ -165,11 +165,10 @@ export function Video({
       playsInline
       crossOrigin={crossOrigin}
       className={className}
-      // Keep the <video> on its own GPU compositor layer so an animated transform (e.g. a
-      // Ken Burns scale) is applied continuously by the GPU instead of re-laying-out + snapping
-      // the element box to whole device pixels every frame — that snapping is visible shake in
-      // a scaled-down live preview. (The composition's own `transform` still wins via ...style.)
-      style={{ willChange: 'transform', backfaceVisibility: 'hidden', ...style }}
+      // No GPU hints — @remotion/player's preview <video> passes the author style through
+      // untouched. will-change:transform doesn't stop a video layer's integer-pixel snapping
+      // (that happens at presentation regardless of promotion); it only adds a snappable seam.
+      style={style}
       onCanPlay={onCanPlay}
       onError={onError}
       onSeeking={onSeeking}

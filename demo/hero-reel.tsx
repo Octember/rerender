@@ -48,8 +48,13 @@ export function HeroReel(): JSX.Element {
   // root background would paint over the video (the bug that hid the footage before).
   return (
     <AbsoluteFill style={{ fontFamily: FONT, overflow: 'hidden' }}>
-      {/* real footage — the clear hero */}
-      <Video src={staticFile('demo-clip.mp4')} style={{ width: '100%', height: '100%', objectFit: 'cover', transform: `scale(${ken})` }} />
+      {/* real footage — the clear hero. The Ken Burns scale rides a WRAPPER, not the <video>
+          itself, so the animated transform drives a plain element instead of re-snapping the
+          video compositor layer each frame (the export reads the same scaled box via
+          getBoundingClientRect, so the encoded output is unchanged). */}
+      <AbsoluteFill style={{ transform: `scale(${ken})`, overflow: 'hidden' }}>
+        <Video src={staticFile('demo-clip.mp4')} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      </AbsoluteFill>
 
       {/* hue-shifting color grade — subtle mood, footage still reads through */}
       <AbsoluteFill
