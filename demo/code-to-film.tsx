@@ -16,11 +16,13 @@ const STR = '#98c379';
 // duration and everything after it slides to match — no chasing magic numbers through the JSX.
 const BEATS = [
   { k: 'lead', d: 4 }, //      a still moment before anything appears
-  { k: 'pop', d: 92 }, //      a bordered square springs in — and holds, so it reads
-  { k: 'round', d: 80 }, //    its corners round off
-  { k: 'tilt', d: 80 }, //     it rotates
-  { k: 'lift', d: 80 }, //     a shadow lifts it off the page
-  { k: 'fill', d: 60 }, //     a gradient fills the face — the card is complete
+  { k: 'pop', d: 60 }, //      a bordered square springs in — the spring settles well inside this,
+  //                            so it's a brief hold to read, not a dead wait
+  { k: 'round', d: 64 }, //    its corners round off
+  { k: 'tilt', d: 64 }, //     it rotates
+  { k: 'lift', d: 70 }, //     a shadow lifts it off the page
+  { k: 'fill', d: 60 }, //     a gradient fills the face — the card is complete. The first color in
+  //                            the whole film now lands well inside 10s, not at 11.2s.
   { k: 'compose', d: 110 }, // it glides to centre, multiplies into a grid of pure CSS, and HOLDS so
   //                            you can read each technique — conic-gradient, clip-path, mask-image…
   { k: 'grow', d: 76 }, //     the card grows into a full-frame screen, the footage inside it
@@ -142,6 +144,16 @@ export function CodeToFilm(): JSX.Element {
           style={{
             opacity: seg(0, 18) * seg(T.grow - 24, T.grow - 2, 1, 0),
             background: 'radial-gradient(125% 85% at 50% 36%, #17121f 0%, #0a0712 52%, #040209 100%)',
+          }}
+        />
+
+        {/* a soft ambient glow, slowly drifting, present from frame 0 — keeps the build's mostly-empty
+          frame alive without adding a second "object" (which would contradict the one-div story).
+          Fades out as the grid's own glow (below) takes over once it arrives. */}
+        <AbsoluteFill
+          style={{
+            opacity: seg(0, 26) * 0.16 * seg(T.compose - 16, T.compose + 14, 1, 0),
+            background: `radial-gradient(560px 560px at ${30 + Math.sin(ph * 0.2) * 6}% ${52 + Math.cos(ph * 0.16) * 6}%, rgba(166,75,244,0.55), transparent 62%)`,
           }}
         />
 
