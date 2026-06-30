@@ -102,6 +102,15 @@ export function CodeToFilm(): JSX.Element {
 
   return (
     <AbsoluteFill style={{ fontFamily: SANS, overflow: 'hidden' }}>
+      {/* atmospheric backdrop for the build/grid (deep indigo, not flat black) — fades out before
+          the footage reveals, since the export composites any non-video layer ON TOP of the video */}
+      <AbsoluteFill
+        style={{
+          opacity: seg(0, 18) * seg(124, 140, 1, 0),
+          background: 'radial-gradient(125% 85% at 50% 36%, #17121f 0%, #0a0712 52%, #040209 100%)',
+        }}
+      />
+
       {/* soft center glow behind the grid */}
       <AbsoluteFill
         style={{ opacity: glowOp * 0.6, background: 'radial-gradient(circle at 50% 50%, rgba(166,75,244,0.5), transparent 58%)' }}
