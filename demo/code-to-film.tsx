@@ -26,7 +26,10 @@ const BEATS = [
   { k: 'compose', d: 110 }, // it glides to centre, multiplies into a grid of pure CSS, and HOLDS so
   //                            you can read each technique — conic-gradient, clip-path, mask-image…
   { k: 'grow', d: 76 }, //     the card grows into a full-frame screen, the footage inside it
-  { k: 'film', d: 58 }, //     the finished film plays and the punchline lands
+  { k: 'film', d: 100 }, //    the finished film plays, the punchline lands, holds, then fades to
+  //                            black — this composition LOOPS with a bare jump back to frame 0
+  //                            (no crossfade), so the tail must already be black or the loop reads
+  //                            as a jarring cut from the brightest frame straight to a dark one.
 ] as const;
 // how long each CSS property takes to MORPH in (frames). Wide = the change glides slowly into
 // place instead of snapping then sitting on a dead hold — the build reads as luxurious, not static.
@@ -129,6 +132,9 @@ export function CodeToFilm(): JSX.Element {
   const t1 = tSpring(T.film + 12);
   const t3 = seg(T.film + 36, T.film + 52);
   const flash = seg(T.grow + 14, T.grow + 24, 0, 0.92) * seg(T.grow + 24, T.grow + 56, 1, 0); // bloom-burst as the card opens into the film
+  // the title holds fully settled, then the whole scene fades to black over the final 24 frames —
+  // so the loop's jump back to frame 0 (also near-black) reads as a clean cut, not a jarring one
+  const endFade = seg(last - 24, last);
   // a FIXED overscan — deliberately NOT animated. An ancestor scale that changes every frame forces
   // every glyph beneath it to re-rasterize and snap to the pixel grid each frame, which reads as Y
   // jitter on the type. The drift that needed a moving zoom is gone, so this stays constant.
@@ -413,6 +419,9 @@ export function CodeToFilm(): JSX.Element {
             </div>
           </div>
         </AbsoluteFill>
+
+        {/* fade to black for the loop point — see endFade above */}
+        <AbsoluteFill style={{ opacity: endFade, background: '#000' }} />
       </AbsoluteFill>
 
       {/* frame HUD — ticks identically in the preview AND the exported mp4 */}
