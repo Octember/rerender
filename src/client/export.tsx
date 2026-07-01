@@ -228,14 +228,14 @@ export async function exportToMp4(opts: ClientExportOptions): Promise<Blob> {
   const source = new CanvasSource(canvas, {
     codec,
     bitrate: QUALITY_HIGH,
-    // NOT hardwareAcceleration:'prefer-hardware' — tried it for encode speed, but it doesn't
-    // gracefully fall back everywhere: on at least one real, GPU-less environment (a CI runner)
+    // NOT hardwareAcceleration:'prefer-hardware': tried it for encode speed, but it doesn't
+    // gracefully fall back everywhere. On at least one real, GPU-less environment (a CI runner)
     // it made WebCodecs reject the encoder configuration outright instead of using software,
     // hard-failing the whole export. 'no-preference' (the default, mediabunny's own
     // recommendation) lets the browser choose and never turns "no GPU available" into a crash.
     // Also NOT latencyMode:'realtime', which may DROP frames under load and corrupt a
     // frame-accurate export.
-    // One keyframe for the whole clip (only frame 0, forced below) — no periodic I-frames to encode.
+    // One keyframe for the whole clip (only frame 0, forced below): no periodic I-frames to encode.
     keyFrameInterval: durationInFrames / fps,
   });
   output.addVideoTrack(source, { frameRate: fps });
