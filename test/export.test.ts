@@ -87,7 +87,11 @@ async function main(): Promise<void> {
     const jsErrors: string[] = [];
     page.on('pageerror', (e) => jsErrors.push(String(e)));
 
-    await page.goto(base, { waitUntil: 'load' });
+    // ?smoketest: capture a short slice of the reveal act instead of the full ~18s hero video.
+    // The full export is genuinely heavy (software-rendered WebCodecs encoding of a
+    // video-compositing-heavy composition) and unreliable on a free CI runner's 2 cores; this
+    // exercises the exact same real export mechanism through the real UI, just less of it.
+    await page.goto(`${base}?smoketest`, { waitUntil: 'load' });
 
     const clicked = await page.evaluate(() => {
       const b = Array.from(document.querySelectorAll('button')).find((x) => /Export this to MP4/i.test(x.textContent ?? ''));

@@ -97,10 +97,24 @@ function highlight(text: string): JSX.Element[] {
   ));
 }
 
-export function CodeToFilm(): JSX.Element {
-  const frame = useCurrentFrame();
-  const { fps, durationInFrames } = useVideoConfig();
-  const last = durationInFrames - 1;
+interface CodeToFilmProps {
+  // Shifts the effective frame forward, so the export can start partway through the story
+  // instead of always from frame 0 — used by the CI smoke test to capture a short slice of the
+  // (expensive, video-compositing-heavy) reveal act instead of the full ~18s timeline. Every
+  // beat's own spring/interpolate math is relative to T.<beat>, so anything before the offset
+  // just reads as "already settled" — no special-casing needed elsewhere in this file.
+  frameOffset?: number;
+}
+
+export function CodeToFilm({ frameOffset = 0 }: CodeToFilmProps = {}): JSX.Element {
+  const frame = useCurrentFrame() + frameOffset;
+  const { fps } = useVideoConfig();
+  // NOT derived from useVideoConfig().durationInFrames: that reflects how many frames THIS
+  // export/preview actually renders, which the CI slice above deliberately shrinks. `last` is
+  // the true final frame of the full story, used throughout for "hold until the very end"
+  // interpolations (fade-to-black, the closing color grade) — those must stay anchored to the
+  // real ending even when only a short slice near the middle is being captured.
+  const last = CODE_TO_FILM_DURATION - 1;
   const ph = frame / fps;
   const clamp = { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' } as const;
   const key = (pts: number[], vals: number[]): number => interpolate(frame, pts, vals, clamp);
@@ -263,9 +277,14 @@ export function CodeToFilm(): JSX.Element {
           {/* the footage — bottom layer, rounded to the card via the renderer's border-radius clip.
             Held on its first frame until the reveal (T.grow) so it never plays — and never jitters —
             behind the still-transparent square during the slow build; it comes alive as the card opens. */}
+          {/* trimBefore compensates for frameOffset: <Video> calls useCurrentFrame() itself, which
+            reads the RAW (un-shifted) context value, not this component's local `frame` variable
+            above — so when frameOffset shifts the story forward, the offset has to be folded into
+            trimBefore too, or the footage sources from the wrong (usually negative/clamped) time.
+            frameOffset defaults to 0, so this is trimBefore={-T.grow} for every normal render. */}
           <Video
             src={staticFile('demo-clip.mp4')}
-            trimBefore={-T.grow}
+            trimBefore={frameOffset - T.grow}
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', borderRadius: heroRadius }}
           />
           {/* opaque panel that hides the footage through the whole build so it never shimmers behind

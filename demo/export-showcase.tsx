@@ -12,7 +12,17 @@ import { CodeToFilm, CODE_TO_FILM_DURATION } from './code-to-film';
 const W = 1280;
 const H = 720;
 const FPS = 30;
-const DUR = CODE_TO_FILM_DURATION; // single source of truth — the comp owns its own length
+// The CI smoke test (test/export.test.ts) loads this page with ?smoketest so both the live
+// preview and the export capture a short slice of the reveal act instead of the full ~18s
+// timeline — the full hero video is genuinely heavy (software-rendered WebCodecs encoding of a
+// video-compositing-heavy composition), too heavy to reliably finish on a free CI runner. The
+// real page (no query param) is completely unaffected: same duration, same frameOffset 0, as
+// always. Mirrors how the render-smoke CI job already renders a short clip for the same reason.
+const SMOKE_TEST = typeof location !== 'undefined' && new URLSearchParams(location.search).has('smoketest');
+const CI_FRAME_OFFSET = 350; // just before T.grow(370) — starts with the reveal transition still visible
+const CI_DUR = 100; // covers the reveal (370-430) plus settled full-screen footage after, for sampling
+const DUR = SMOKE_TEST ? CI_DUR : CODE_TO_FILM_DURATION; // single source of truth — the comp owns its own length
+const FRAME_OFFSET = SMOKE_TEST ? CI_FRAME_OFFSET : 0;
 const ACCENT = '#ff5e8a';
 const DISPLAY_W = 468; // the hero's pre-measure fallback width basis
 
@@ -291,6 +301,7 @@ export function ExportShowcase(): JSX.Element {
     try {
       const blob = await exportToMp4({
         Component: CodeToFilm as ComponentType<Record<string, unknown>>,
+        props: { frameOffset: FRAME_OFFSET },
         config: { width: W, height: H, fps: FPS, durationInFrames: DUR },
         onProgress: (done) => {
           if (done % step === 0 || done === DUR) {
@@ -328,6 +339,7 @@ export function ExportShowcase(): JSX.Element {
         <Player
           ref={player}
           composition={CodeToFilm}
+          inputProps={{ frameOffset: FRAME_OFFSET }}
           width={W}
           height={H}
           fps={FPS}
