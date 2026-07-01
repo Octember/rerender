@@ -23,7 +23,7 @@ const CI_FRAME_OFFSET = 350; // just before T.grow(370) — starts with the reve
 const CI_DUR = 100; // covers the reveal (370-430) plus settled full-screen footage after, for sampling
 const DUR = SMOKE_TEST ? CI_DUR : CODE_TO_FILM_DURATION; // single source of truth — the comp owns its own length
 const FRAME_OFFSET = SMOKE_TEST ? CI_FRAME_OFFSET : 0;
-const ACCENT = '#ff5e8a';
+const ACCENT = '#61afef'; // same blue used for keywords in the CSS/CLI snippets below — one accent, not a gradient
 const DISPLAY_W = 468; // the hero's pre-measure fallback width basis
 
 const card: CSSProperties = { background: '#0f0f15', border: '1px solid #23232c', borderRadius: 14, overflow: 'hidden' };
@@ -31,9 +31,7 @@ const bigStat: CSSProperties = {
   fontSize: 40,
   fontWeight: 850,
   lineHeight: 1,
-  background: 'linear-gradient(90deg,#ff5e8a,#ffa14a)',
-  WebkitBackgroundClip: 'text',
-  WebkitTextFillColor: 'transparent',
+  color: ACCENT,
   letterSpacing: -1,
 };
 const cardLabel: CSSProperties = {
@@ -49,22 +47,22 @@ const cardLabel: CSSProperties = {
   flexWrap: 'wrap',
 };
 
-function Badge({ icon, children }: { icon: string; children: React.ReactNode }): JSX.Element {
+function Badge({ children }: { children: React.ReactNode }): JSX.Element {
   return (
     <span
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        gap: 7,
+        gap: 8,
         background: '#16161d',
         border: '1px solid #26262e',
         borderRadius: 999,
         padding: '7px 14px',
         fontSize: 13,
+        fontFamily: 'ui-monospace, monospace',
         color: '#cfcfd8',
       }}
     >
-      <span style={{ fontSize: 14 }}>{icon}</span>
       {children}
     </span>
   );
@@ -122,11 +120,11 @@ function CssReveal(): JSX.Element {
 }
 
 // ── where the FARM runs — portability, not browser-export trivia ──
-const HOSTS: { icon: string; name: string; note: string }[] = [
-  { icon: '🪰', name: 'Fly.io', note: 'Firecracker microVMs' },
-  { icon: '☁️', name: 'AWS', note: 'EC2, ECS, your own box' },
-  { icon: '🐳', name: 'Docker', note: 'anywhere it runs' },
-  { icon: '🖥', name: 'Bare metal', note: 'no platform required' },
+const HOSTS: { name: string; note: string }[] = [
+  { name: 'Fly.io', note: 'Firecracker microVMs' },
+  { name: 'AWS', note: 'EC2, ECS, your own box' },
+  { name: 'Docker', note: 'anywhere it runs' },
+  { name: 'Bare metal', note: 'no platform required' },
 ];
 
 function PortableHosting(): JSX.Element {
@@ -149,7 +147,6 @@ function PortableHosting(): JSX.Element {
               padding: '12px 16px',
             }}
           >
-            <span style={{ fontSize: 18 }}>{h.icon}</span>
             <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.3 }}>
               <span style={{ fontWeight: 700, fontSize: 14 }}>{h.name}</span>
               <span style={{ color: '#8a8a99', fontSize: 12 }}>{h.note}</span>
@@ -242,7 +239,7 @@ function VsTable(): JSX.Element {
                   color: ACCENT,
                   fontWeight: 800,
                   borderBottom: `2px solid ${ACCENT}`,
-                  background: 'rgba(255,94,138,0.06)',
+                  background: 'rgba(97,175,239,0.06)',
                 }}
               >
                 rerender
@@ -380,15 +377,14 @@ export function ExportShowcase(): JSX.Element {
           onClick={run}
           disabled={status === 'running'}
           style={{
-            background: status === 'running' ? '#3a2230' : `linear-gradient(135deg, ${ACCENT}, #ff8a4a)`,
-            color: '#fff',
+            background: status === 'running' ? '#1c2733' : ACCENT,
+            color: status === 'running' ? '#9a9aa6' : '#0b0b0d',
             border: 0,
             borderRadius: 12,
             padding: '15px 30px',
             fontSize: 17,
             fontWeight: 700,
             cursor: status === 'running' ? 'default' : 'pointer',
-            boxShadow: status === 'running' ? 'none' : '0 10px 36px rgba(255,94,138,0.4)',
           }}
         >
           {status === 'running' ? `Exporting… ${pct}%` : status === 'done' ? '↻ Export again' : '⬇ Export this to MP4 in your browser'}
@@ -448,7 +444,7 @@ export function ExportShowcase(): JSX.Element {
                       style={{
                         width: `${pct}%`,
                         height: '100%',
-                        background: `linear-gradient(90deg,${ACCENT},#ffa14a)`,
+                        background: ACCENT,
                         transition: 'width 0.15s linear',
                       }}
                     />
@@ -497,9 +493,9 @@ export function ExportShowcase(): JSX.Element {
                 <span style={{ fontSize: 18 }}>⬇</span> Download again
               </a>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <Badge icon="🎞">{DUR} frames</Badge>
-                <Badge icon="🖥">no server</Badge>
-                <Badge icon="🚫">no ffmpeg</Badge>
+                <Badge>{DUR} frames</Badge>
+                <Badge>no server</Badge>
+                <Badge>no ffmpeg</Badge>
               </div>
             </div>
           )}

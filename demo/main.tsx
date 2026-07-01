@@ -7,7 +7,7 @@ if (!root) throw new Error('no #root');
 createRoot(root).render(
   <>
     <style>{`
-      html, body { margin:0; background: radial-gradient(1200px 620px at 72% -12%, #1b1226, #07070b 62%); }
+      html, body { margin:0; background: #0b0b0d; }
       body { color:#e9e9ee; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing:antialiased; }
       @keyframes fadein { to { opacity:1 } }
       a { text-decoration:none }
@@ -41,16 +41,7 @@ createRoot(root).render(
 
       <section style={{ marginBottom: 36 }}>
         <h1 style={{ fontSize: 'clamp(34px, 8.5vw, 56px)', fontWeight: 850, lineHeight: 1.05, margin: '0 0 18px', letterSpacing: -1.6 }}>
-          Export video{' '}
-          <span
-            style={{
-              background: 'linear-gradient(90deg,#ff5e8a,#ffa14a)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-            }}
-          >
-            in your browser.
-          </span>
+          Export video <span style={{ color: '#61afef' }}>in your browser.</span>
         </h1>
         <p style={{ fontSize: 19, color: '#9a9aa6', maxWidth: 660, lineHeight: 1.55, margin: 0 }}>
           It's the same React you'd write in Remotion: real DOM, real CSS. One click frame-steps the composition, captures each frame from
