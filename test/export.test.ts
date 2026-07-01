@@ -104,6 +104,15 @@ async function main(): Promise<void> {
     // `__name` helper that doesn't exist in the page, so everything here is inlined.
     const probe = (await page.evaluate(async () => {
       const v = Array.from(document.querySelectorAll('video')).find((x) => x.src.startsWith('blob:')) as HTMLVideoElement;
+      // v.src is set as soon as the blob exists, but on a slow/software-rendered machine the
+      // browser hasn't necessarily finished loading its metadata yet — v.duration reads NaN until
+      // it has, and seeking to NaN*0.93 throws. Wait for real metadata before computing the seek.
+      if (!Number.isFinite(v.duration)) {
+        await new Promise<void>((res) => {
+          if (Number.isFinite(v.duration)) return res(undefined);
+          v.addEventListener('loadedmetadata', () => res(undefined), { once: true });
+        });
+      }
       v.pause();
       v.currentTime = v.duration * 0.93; // footage fills the frame only in the final act — sample there, whatever the comp's length
       await new Promise<void>((res) => {
