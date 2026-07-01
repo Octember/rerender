@@ -171,8 +171,8 @@ function PortableHosting(): JSX.Element {
       >
         <span style={{ color: '#5c6370' }}># not on npm yet, clone + install from source</span>
         {'\n'}
-        <span style={{ color: '#61afef' }}>git</span> clone https://github.com/Octember/rerender && <span style={{ color: '#61afef' }}>cd</span>{' '}
-        rerender
+        <span style={{ color: '#61afef' }}>git</span> clone https://github.com/Octember/rerender &&{' '}
+        <span style={{ color: '#61afef' }}>cd</span> rerender
         {'\n'}
         <span style={{ color: '#61afef' }}>npm</span> install
         {'\n\n'}
