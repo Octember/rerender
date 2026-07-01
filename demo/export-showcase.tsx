@@ -254,7 +254,7 @@ function VsTable(): JSX.Element {
                   <span style={{ color: '#ff8080', marginRight: 8 }}>✕</span>
                   {r.remotion}
                 </td>
-                <td style={{ padding: '13px 16px', color: '#fff', borderBottom: '1px solid #16161d', background: 'rgba(255,94,138,0.06)' }}>
+                <td style={{ padding: '13px 16px', color: '#fff', borderBottom: '1px solid #16161d', background: 'rgba(97,175,239,0.06)' }}>
                   <span style={{ color: '#7fdca0', marginRight: 8 }}>✓</span>
                   {r.rerender}
                 </td>
