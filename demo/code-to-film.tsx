@@ -179,7 +179,10 @@ export function CodeToFilm(): JSX.Element {
         {/* THE DESIGN LANGUAGE — a labeled grid of styled divs that fly out of the hero with 3D depth */}
         {GRID.map((c) => {
           const order = Math.abs(c.dx) + Math.abs(c.dy); // assemble from the centre outward
-          const pop = Math.max(0, spring({ frame: frame - (T.compose + 16 + (order / G) * 6), fps, config: { damping: 13, stiffness: 130 } }));
+          const pop = Math.max(
+            0,
+            spring({ frame: frame - (T.compose + 16 + (order / G) * 6), fps, config: { damping: 13, stiffness: 130 } }),
+          );
           const spread = pop * (1 + (1 - gridIn) * 2.2); // fly OUT of the hero, then explode outward as it opens
           const cx = 640 + c.dx * spread;
           const cy = 360 + c.dy * spread;
@@ -327,7 +330,10 @@ export function CodeToFilm(): JSX.Element {
         ))}
         {/* cinematic vignette for depth */}
         <AbsoluteFill
-          style={{ opacity: seg(T.grow + 44, T.grow + 74) * 0.55, background: 'radial-gradient(circle at 50% 46%, transparent 42%, rgba(2,1,8,0.9) 100%)' }}
+          style={{
+            opacity: seg(T.grow + 44, T.grow + 74) * 0.55,
+            background: 'radial-gradient(circle at 50% 46%, transparent 42%, rgba(2,1,8,0.9) 100%)',
+          }}
         />
         {/* light bloom-burst as the card opens into the film */}
         <AbsoluteFill
@@ -402,7 +408,12 @@ export function CodeToFilm(): JSX.Element {
         >
           <span style={{ opacity: seg(2, 12) * seg(T.compose, T.compose + 16, 1, 0) }}>{'// it starts with one <div>'}</span>
           <span
-            style={{ position: 'absolute', left: 0, width: '100%', opacity: seg(T.compose + 16, T.compose + 30) * seg(T.grow - 8, T.grow + 6, 1, 0) }}
+            style={{
+              position: 'absolute',
+              left: 0,
+              width: '100%',
+              opacity: seg(T.compose + 16, T.compose + 30) * seg(T.grow - 8, T.grow + 6, 1, 0),
+            }}
           >
             {'// …and it composes, all of it just CSS'}
           </span>

@@ -83,8 +83,7 @@ function CssReveal(): JSX.Element {
     <div style={{ marginTop: 30 }}>
       <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>Every shape in that film is one styled &lt;div&gt;.</div>
       <div style={{ color: '#8a8a99', fontSize: 14, marginBottom: 14, maxWidth: 720 }}>
-        No canvas drawing, no shader. Just CSS the renderer rasterizes straight into the mp4. The radial-gradient tile in the grid, for
-        one:
+        No canvas drawing, no shader. Just CSS the renderer rasterizes straight into the mp4. The radial-gradient tile in the grid, for one:
       </div>
       <pre
         style={{
@@ -100,11 +99,10 @@ function CssReveal(): JSX.Element {
       >
         <span style={d}>&lt;</span>
         <span style={f}>div</span> <span style={{ color: '#d19a66' }}>style</span>={'{{'}
-        {'\n'} <span style={{ color: '#d19a66' }}>width</span>: <span style={s}>138</span>, <span style={{ color: '#d19a66' }}>height</span>:{' '}
-        <span style={s}>138</span>, <span style={{ color: '#d19a66' }}>borderRadius</span>: <span style={s}>'50%'</span>,{'\n'}{' '}
+        {'\n'} <span style={{ color: '#d19a66' }}>width</span>: <span style={s}>138</span>, <span style={{ color: '#d19a66' }}>height</span>
+        : <span style={s}>138</span>, <span style={{ color: '#d19a66' }}>borderRadius</span>: <span style={s}>'50%'</span>,{'\n'}{' '}
         <span style={{ background: 'rgba(255,94,138,0.14)', borderRadius: 4, padding: '1px 3px' }}>
-          <span style={{ color: '#d19a66' }}>background</span>:{' '}
-          <span style={s}>{"'radial-gradient(circle at 38% 32%,'"}</span>
+          <span style={{ color: '#d19a66' }}>background</span>: <span style={s}>{"'radial-gradient(circle at 38% 32%,'"}</span>
           {'\n'} <span style={s}>{"  '#ffe08a, #ff5e8a 72%)'"}</span>
         </span>
         ,{'\n'} {'}}'} <span style={d}>/&gt;</span>
@@ -396,18 +394,42 @@ export function ExportShowcase(): JSX.Element {
               }}
             >
               {status === 'running' && (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24, width: '100%' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 12,
+                    padding: 24,
+                    width: '100%',
+                  }}
+                >
                   <div style={{ fontFamily: 'ui-monospace, monospace', fontSize: 13, color: '#fff' }}>
                     encoding frame {frameNo} / {DUR}
                   </div>
                   <div style={{ width: '80%', height: 6, background: 'rgba(255,255,255,0.15)', borderRadius: 999, overflow: 'hidden' }}>
-                    <div style={{ width: `${pct}%`, height: '100%', background: `linear-gradient(90deg,${ACCENT},#ffa14a)`, transition: 'width 0.15s linear' }} />
+                    <div
+                      style={{
+                        width: `${pct}%`,
+                        height: '100%',
+                        background: `linear-gradient(90deg,${ACCENT},#ffa14a)`,
+                        transition: 'width 0.15s linear',
+                      }}
+                    />
                   </div>
                 </div>
               )}
               {status === 'done' && url && (
                 // biome-ignore lint/a11y/useMediaCaption: a generated demo clip, no captions
-                <video src={url} autoPlay loop muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                <video
+                  src={url}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                />
               )}
               {status === 'error' && <div style={{ color: '#ff6b6b', fontSize: 13, padding: 20 }}>✗ {err}</div>}
             </div>
