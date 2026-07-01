@@ -1,6 +1,6 @@
-// AWS invoker — drives the deployed Lambda. For each slice it invokes the function
+// AWS invoker: drives the deployed Lambda. For each slice it invokes the function
 // (which renders the segment to S3) and downloads the segment locally so the
-// coordinator (orchestrateRender) can concat. The Invoker seam keeps this swappable —
+// coordinator (orchestrateRender) can concat. The Invoker seam keeps this swappable,
 // e.g. a firecracker/local backend could implement the same interface.
 import { writeFileSync } from 'node:fs';
 import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';

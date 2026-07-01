@@ -1,6 +1,6 @@
-// rerender cloud deploy — the whole hook, one command. Builds the worker image
+// rerender cloud deploy: the whole hook, one command. Builds the worker image
 // (linux/amd64), pushes it to ECR (creating the repo if needed), and deploys the
-// CloudFormation stack (Lambda + S3). No SAM, no manual steps — just docker + the AWS
+// CloudFormation stack (Lambda + S3). No SAM, no manual steps, just docker + the AWS
 // CLI, which `rerender cloud deploy` shells out to.
 import { execFileSync, execSync } from 'node:child_process';
 import { relative } from 'node:path';
@@ -60,7 +60,7 @@ export async function deploy(opts: DeployOptions): Promise<DeployResult> {
     const projectArg = relative(REPO_ROOT, opts.project);
     if (projectArg.startsWith('..'))
       throw new Error(`project must live inside the rerender repo for now (got ${opts.project}); copy it under templates/ or a subdir`);
-    console.log(`• building worker image (linux/amd64 — chrome-headless-shell is x86_64 only), baking ${projectArg}…`);
+    console.log(`• building worker image (linux/amd64, chrome-headless-shell is x86_64 only), baking ${projectArg}…`);
     // --provenance=false: buildx otherwise emits an attestation manifest list that Lambda rejects.
     runFile('docker', [
       'build',
@@ -91,7 +91,7 @@ export async function deploy(opts: DeployOptions): Promise<DeployResult> {
       run(`aws cloudformation wait stack-delete-complete --region ${region} --stack-name ${stack}`);
     }
   } catch {
-    /* stack doesn't exist yet — fine */
+    /* stack doesn't exist yet, fine */
   }
 
   console.log('• deploying CloudFormation stack…');

@@ -1,4 +1,4 @@
-// rerender cloud — fan a render out across N workers, collect the segments, concat.
+// rerender cloud: fan a render out across N workers, collect the segments, concat.
 // The invoker is pluggable: the same orchestration drives AWS Lambda invocations in
 // production and local subprocesses in dev/test. Each worker renders ONE frame-range
 // segment (keyframe-started, silent); concatSegments stitches them with no re-encode.

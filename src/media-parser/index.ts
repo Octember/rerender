@@ -1,5 +1,5 @@
 // @remotion/media-parser drop-in over mediabunny (already a rerender dependency). Parses a
-// media URL/blob/buffer and returns the requested metadata fields — what the editor uses for
+// media URL/blob/buffer and returns the requested metadata fields: what an editor uses for
 // drag-drop import (videoCodec / slowDurationInSeconds / dimensions; videoCodec === null
 // means an audio-only file). Editor-side tooling; the render path doesn't use it.
 import { ALL_FORMATS, BlobSource, BufferSource, Input, type Source, UrlSource } from 'mediabunny';
@@ -31,8 +31,8 @@ export interface ParseMediaOptions {
   acknowledgeRemotionLicense?: boolean;
 }
 
-// mediabunny codec ids → Remotion's names where they differ (Bevyl mostly checks null vs
-// non-null to tell audio-only files apart, but match the common strings).
+// mediabunny codec ids -> Remotion's names where they differ. Most callers only check null vs
+// non-null to tell audio-only files apart, but match the common strings anyway.
 const VIDEO_CODEC_NAMES: Record<string, string> = { avc: 'h264', hevc: 'h265' };
 
 function toSource(src: ParseMediaOptions['src']): Source {

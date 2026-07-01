@@ -1,7 +1,8 @@
 // @remotion/lambda-client drop-in. Runs in the CALLER's server (Next.js), so it must stay
 // light: only the AWS SDK + node:crypto, never chrome/vite/mediabunny. It kicks off an
 // async render (invoke the function in `launch` mode, fire-and-forget) and polls progress
-// from S3 — the same renderMediaOnLambda → getRenderProgress contract Bevyl is built on.
+// from S3: the same renderMediaOnLambda -> getRenderProgress contract a Remotion-Lambda
+// caller already expects, so swapping the import is the only change on the caller's side.
 // The deployed function (cloud/handler.ts) does the actual work.
 import { randomBytes } from 'node:crypto';
 import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
@@ -29,7 +30,8 @@ const memoryFromFunctionName = (name: string): number => Number(/mem(\d+)mb/.exe
 const isNoSuchKey = (e: unknown): boolean =>
   !!e && typeof e === 'object' && ('name' in e ? e.name === 'NoSuchKey' || e.name === 'NotFound' : false);
 
-/** Pickable preset fields — Bevyl types ExportRenderPreset = Pick<RenderMediaOnLambdaInput, …>. */
+/** Every field is individually pickable, so a caller can type its own render-preset shape as
+ *  `Pick<RenderMediaOnLambdaInput, ...>` over a subset without pulling in the rest. */
 export interface RenderMediaOnLambdaInput {
   region: string;
   functionName: string;
@@ -46,7 +48,7 @@ export interface RenderMediaOnLambdaInput {
   logLevel?: string;
   timeoutInMilliseconds?: number;
   webhook?: WebhookConfig | null;
-  // codec/encoder tuning Bevyl Picks into its preset (accepted; forwarded where supported)
+  // codec/encoder tuning fields a caller might Pick into its own preset (accepted; forwarded where supported)
   audioBitrate?: string | null;
   videoBitrate?: string | null;
   encodingBufferSize?: string | null;
@@ -136,7 +138,7 @@ export async function getRenderProgress(params: {
     return JSON.parse(await obj.Body!.transformToString()) as RenderProgress;
   } catch (e) {
     if (isNoSuchKey(e)) {
-      // Worker hasn't written progress yet — report in-progress, not failed.
+      // Worker hasn't written progress yet: report in-progress, not failed.
       return {
         renderId: params.renderId,
         bucketName: params.bucketName,
@@ -214,9 +216,9 @@ export async function renderStillOnLambda(input: RenderStillOnLambdaInput): Prom
   return { renderId: id, bucketName: bucket, url: s3PublicUrl(bucket, region, outName), outKey: outName, sizeInBytes: out.sizeInBytes };
 }
 
-// ── appRouterWebhook — the Next.js App Router POST handler Bevyl mounts to receive the
+// -- appRouterWebhook: a Next.js App Router POST handler a caller mounts to receive the
 // completion callback. Verifies our HMAC signature (we sign the POST in the worker), then
-// dispatches to onSuccess / onTimeout / onError with the payload fields Bevyl reads. ──
+// dispatches to onSuccess / onTimeout / onError with the render's result fields. ──
 
 export interface AppRouterWebhookOptions {
   secret: string | null;

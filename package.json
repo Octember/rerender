@@ -1,9 +1,26 @@
 {
   "name": "rerender",
   "version": "0.0.0",
-  "description": "Drop-in, MIT Remotion: renders by frame-stepping the real preview in headless chrome — sliced across N browsers and stitched, ffmpeg-free.",
+  "description": "Drop-in, MIT-licensed Remotion alternative. Renders real DOM to MP4 with WebCodecs and mediabunny, in a browser tab or fanned across parallel headless-Chrome workers. No ffmpeg.",
   "license": "MIT",
   "author": "Noah Lindner",
+  "homepage": "https://rerender.video",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Octember/rerender.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Octember/rerender/issues"
+  },
+  "keywords": [
+    "remotion",
+    "video",
+    "react",
+    "webcodecs",
+    "mp4",
+    "animation",
+    "renderer"
+  ],
   "type": "module",
   "private": true,
   "main": "./src/index.ts",

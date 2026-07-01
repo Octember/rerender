@@ -1,10 +1,10 @@
-// AWS Lambda worker — one container, three modes (discriminated on event.type):
-//   • launch  — the async coordinator: bundle the baked project, render the whole
+// AWS Lambda worker: one container, three modes (discriminated on event.type):
+//   * launch  : the async coordinator. Bundle the baked project, render the whole
 //     composition (with audio), stream progress to S3, upload the result, fire the webhook.
 //     Invoked fire-and-forget by renderMediaOnLambda; getRenderProgress reads its progress.
-//   • still   — render a single frame to S3 and return its size (renderStillOnLambda).
-//   • segment — the original per-range silent worker, fanned out by the synchronous
-//     `rerender cloud render` CLI (cloud/aws.ts → orchestrate.ts).
+//   * still   : render a single frame to S3 and return its size (renderStillOnLambda).
+//   * segment : the original per-range silent worker, fanned out by the synchronous
+//     `rerender cloud render` CLI (cloud/aws.ts -> orchestrate.ts).
 // The project is baked into the image at RERENDER_ENTRY; cold-start seeds Vite's cache.
 import { cpSync, existsSync, readFileSync } from 'node:fs';
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
@@ -36,7 +36,7 @@ if (existsSync(BAKED_VITE_CACHE) && !existsSync('/tmp/.vite-cache')) {
   try {
     cpSync(BAKED_VITE_CACHE, '/tmp/.vite-cache', { recursive: true });
   } catch {
-    /* best-effort — worst case Vite re-optimizes */
+    /* best-effort: worst case Vite re-optimizes */
   }
 }
 
@@ -62,8 +62,8 @@ function errorList(err: unknown): { message: string; stack?: string }[] {
   return [{ message: e?.message ?? String(err), stack: e?.stack }];
 }
 
-// Bevyl passes Remotion's codec names (h264/h265); rerender's WebCodecs encoder speaks the
-// mediabunny names (avc/hevc/…). Translate at the boundary; unsupported codecs fall back to avc.
+// Callers pass Remotion's codec names (h264/h265); rerender's WebCodecs encoder speaks the
+// mediabunny names (avc/hevc/...). Translate at the boundary; unsupported codecs fall back to avc.
 const REMOTION_TO_VIDEO_CODEC: Record<string, VideoCodec> = {
   h264: 'avc',
   avc: 'avc',
@@ -207,7 +207,7 @@ async function launch(event: LaunchEvent): Promise<void> {
         lambdaErrors: errors,
       });
     }
-    // Event invocations have no caller to surface the throw to — progress.json carries the failure.
+    // Event invocations have no caller to surface the throw to: progress.json carries the failure.
   }
 }
 

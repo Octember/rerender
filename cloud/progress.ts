@@ -1,11 +1,11 @@
 // Shared, dependency-light contract between the @remotion/lambda-client drop-in
 // (cloud/lambda-client.ts, runs in the caller's server) and the Lambda worker
-// (cloud/handler.ts). NO chrome/vite/mediabunny imports here — the client side must stay
-// light. Holds the render-progress shape Bevyl reads, the S3 key conventions, the Lambda
+// (cloud/handler.ts). NO chrome/vite/mediabunny imports here: the client side must stay
+// light. Holds the render-progress shape a caller polls, the S3 key conventions, the Lambda
 // event types, and the webhook signing both ends agree on.
 import { createHmac } from 'node:crypto';
 
-/** S3 key conventions — Remotion's `renders/<id>/…` layout, which Bevyl reconstructs
+/** S3 key conventions: Remotion's `renders/<id>/...` layout, which a caller can reconstruct
  *  client-side (`https://<bucket>.s3.<region>.amazonaws.com/renders/<id>/out.mp4`). */
 export const outputKey = (renderId: string, ext = 'mp4'): string => `renders/${renderId}/out.${ext}`;
 export const progressKey = (renderId: string): string => `renders/${renderId}/progress.json`;
@@ -20,8 +20,9 @@ export interface RenderCosts {
   disclaimer: string;
 }
 
-/** The render-progress object stored at progressKey() and returned by getRenderProgress() —
- *  a field-for-field structural match for what Bevyl reads off @remotion/lambda-client. */
+/** The render-progress object stored at progressKey() and returned by getRenderProgress():
+ *  a field-for-field structural match for @remotion/lambda-client's own shape, so an existing
+ *  caller's polling/parsing code needs no changes to switch over. */
 export interface RenderProgress {
   renderId: string;
   bucketName: string;
@@ -40,7 +41,7 @@ export interface RenderProgress {
 }
 
 // AWS Lambda's GB-second price (us-east-1, x86) + per-request price. Used to fill the
-// `costs` Bevyl records for COGS — an estimate from billed duration, not an invoice.
+// `costs` field for a caller's own cost tracking: an estimate from billed duration, not an invoice.
 const GB_SECOND_USD = 0.0000166667;
 const REQUEST_USD = 0.0000002;
 
@@ -65,7 +66,7 @@ export const timeToFinish = (elapsedMs: number, overallProgress: number): number
       ? 0
       : null;
 
-// ── Lambda event types — one function, three modes (discriminated on `type`) ──
+// -- Lambda event types: one function, three modes (discriminated on `type`) --
 
 export interface LaunchEvent {
   type: 'launch';
@@ -103,7 +104,7 @@ export interface WebhookConfig {
   customData?: Record<string, unknown> | null;
 }
 
-// ── Webhook signing — both ends are ours, so we just need to be self-consistent.
+// -- Webhook signing: both ends are ours, so we just need to be self-consistent.
 // Mirrors Remotion's scheme: HMAC-SHA512 hex of the raw JSON body, sent as a header. ──
 
 export const WEBHOOK_SIGNATURE_HEADER = 'x-remotion-signature';
