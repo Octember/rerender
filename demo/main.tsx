@@ -7,8 +7,8 @@ if (!root) throw new Error('no #root');
 createRoot(root).render(
   <>
     <style>{`
-      body { margin:0; background: radial-gradient(1200px 620px at 72% -12%, #1b1226, #07070b 62%); color:#e9e9ee;
-             font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing:antialiased; }
+      html, body { margin:0; background: radial-gradient(1200px 620px at 72% -12%, #1b1226, #07070b 62%); }
+      body { color:#e9e9ee; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing:antialiased; }
       @keyframes fadein { to { opacity:1 } }
       a { text-decoration:none }
       button { font-family: inherit }
@@ -17,6 +17,26 @@ createRoot(root).render(
       <header style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 54, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 22, fontWeight: 800, letterSpacing: -0.5 }}>rerender</span>
         <span style={{ fontSize: 13, color: '#8a8a99' }}>a drop-in, MIT-licensed Remotion alternative</span>
+        <a
+          href="https://github.com/Octember/rerender"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            marginLeft: 'auto',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 7,
+            background: '#16161d',
+            border: '1px solid #26262e',
+            borderRadius: 999,
+            padding: '7px 14px',
+            fontSize: 13,
+            fontWeight: 600,
+            color: '#cfcfd8',
+          }}
+        >
+          <span style={{ fontSize: 14 }}>★</span> Star on GitHub
+        </a>
       </header>
 
       <section style={{ marginBottom: 36 }}>

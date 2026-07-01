@@ -157,6 +157,29 @@ function PortableHosting(): JSX.Element {
           </span>
         ))}
       </div>
+      <pre
+        style={{
+          ...card,
+          margin: '14px 0 0',
+          padding: '16px 18px',
+          fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
+          fontSize: 13,
+          lineHeight: 1.75,
+          color: '#abb2bf',
+          overflowX: 'auto',
+        }}
+      >
+        <span style={{ color: '#5c6370' }}># not on npm yet, clone + install from source</span>
+        {'\n'}
+        <span style={{ color: '#61afef' }}>git</span> clone https://github.com/Octember/rerender && <span style={{ color: '#61afef' }}>cd</span>{' '}
+        rerender
+        {'\n'}
+        <span style={{ color: '#61afef' }}>npm</span> install
+        {'\n\n'}
+        <span style={{ color: '#5c6370' }}># fan a render across your own cores, self-hosted, no cloud required</span>
+        {'\n'}
+        <span style={{ color: '#61afef' }}>npx</span> rerender render ./src/index.tsx MyComp out.mp4
+      </pre>
     </div>
   );
 }
