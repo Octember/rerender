@@ -16,13 +16,13 @@ const STR = '#98c379';
 // duration and everything after it slides to match — no chasing magic numbers through the JSX.
 const BEATS = [
   { k: 'lead', d: 4 }, //      a still moment before anything appears
-  { k: 'pop', d: 60 }, //      a bordered square springs in — the spring settles well inside this,
+  { k: 'pop', d: 48 }, //      a bordered square springs in — the spring settles well inside this,
   //                            so it's a brief hold to read, not a dead wait
-  { k: 'round', d: 64 }, //    its corners round off
-  { k: 'tilt', d: 64 }, //     it rotates
-  { k: 'lift', d: 70 }, //     a shadow lifts it off the page
-  { k: 'fill', d: 60 }, //     a gradient fills the face — the card is complete. The first color in
-  //                            the whole film now lands well inside 10s, not at 11.2s.
+  { k: 'round', d: 52 }, //    its corners round off
+  { k: 'tilt', d: 52 }, //     it rotates
+  { k: 'lift', d: 56 }, //     a shadow lifts it off the page
+  { k: 'fill', d: 48 }, //     a gradient fills the face — the card is complete. Everyone likes the
+  //                            back half; the build was the slow part, tightened again here.
   { k: 'compose', d: 110 }, // it glides to centre, multiplies into a grid of pure CSS, and HOLDS so
   //                            you can read each technique — conic-gradient, clip-path, mask-image…
   { k: 'grow', d: 76 }, //     the card grows into a full-frame screen, the footage inside it
@@ -33,7 +33,7 @@ const BEATS = [
 ] as const;
 // how long each CSS property takes to MORPH in (frames). Wide = the change glides slowly into
 // place instead of snapping then sitting on a dead hold — the build reads as luxurious, not static.
-const MORPH = 56;
+const MORPH = 46;
 // how long the card takes to grow into the screen AND the grid to explode outward. Kept close to
 // MORPH so the reveal lands at the SAME deliberate pace as the build — no jarring fast "explode".
 const GROW_SPAN = 60;
@@ -421,12 +421,6 @@ export function CodeToFilm(): JSX.Element {
                 opacity: t1,
                 transform: `translateY(${interpolate(t1, [0, 1], [30, 0])}px) scale(${interpolate(t1, [0, 1], [0.94, 1])})`,
                 textShadow: '0 10px 50px rgba(255,94,138,0.45), 0 4px 20px rgba(0,0,0,0.6)',
-                // keeps this on its own GPU layer for the title's whole lifetime, so the heavy
-                // blurred text-shadow is rasterized once and the spring's scale/translate is a cheap
-                // GPU transform of that layer — without this, the browser re-rasterizes the shadow
-                // on every animating frame, then can demote the layer right as the spring settles to
-                // a static value, which reads as a glitch/repaint right after the title lands.
-                willChange: 'transform, opacity',
               }}
             >
               This is a React component.
@@ -439,7 +433,6 @@ export function CodeToFilm(): JSX.Element {
                 color: 'rgba(255,255,255,0.66)',
                 letterSpacing: 1,
                 opacity: t3,
-                willChange: 'opacity',
               }}
             >
               in your browser · no server · no ffmpeg
