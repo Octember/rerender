@@ -19,6 +19,12 @@ export type OnFrame = (frame: VideoFrame, requestedSeconds: number) => void;
 export interface FrameExtractor {
   readonly sampleTable: SampleTable;
   /**
+   * Presentation timestamp (µs) of the sample nearest a requested time — the exact
+   * `VideoFrame.timestamp` that `extract` would deliver for it. Stable across calls,
+   * so it works as a cache key for the requested time at any granularity.
+   */
+  snapToSampleMicros(seconds: number): number;
+  /**
    * Decodes the frame nearest each requested timestamp and delivers it via `onFrame`.
    * Frames arrive as they decode (not in request order); the receiver owns each frame
    * and must `close()` it. Resolves when every requested timestamp has been delivered.
@@ -58,7 +64,10 @@ export async function createFrameExtractor(options: FrameExtractorOptions): Prom
   // Presentation ticks of each GOP's keyframe — ascending, used to route a timestamp to its GOP.
   const gopStartTicks = new Float64Array(keySampleIndices.length);
   for (let i = 0; i < keySampleIndices.length; i++) gopStartTicks[i] = presentationTicks[keySampleIndices[i]!]!;
-  const lastTicks = presentationTicks[table.sampleCount - 1]!;
+  // Max presentation tick, not the last decode-order sample: with B-frames the file's
+  // final decoded sample presents *before* the last displayed frame, and clamping to it
+  // would resolve past-end requests to the second-to-last displayed frame.
+  const lastTicks = presentationTicks.reduce((max, ticks) => Math.max(max, ticks), 0);
 
   const toMicros = (ticks: number) => Math.round((ticks / timescale) * MICROSECONDS);
 
@@ -137,15 +146,19 @@ export async function createFrameExtractor(options: FrameExtractorOptions): Prom
     }
   };
 
+  const resolveTarget = (seconds: number): { gopIndex: number; presentationMicros: number } => {
+    const targetTicks = Math.min(Math.max(seconds * timescale, gopStartTicks[0]!), lastTicks);
+    const gopIndex = lastAtOrBefore(gopStartTicks, targetTicks);
+    return { gopIndex, presentationMicros: toMicros(presentationTicks[nearestSampleInGop(gopIndex, targetTicks)]!) };
+  };
+
   const extract: FrameExtractor['extract'] = async (timestampsInSeconds, onFrame) => {
     if (abort.signal.aborted) throw new Error('frame extractor disposed');
     const byGop = new Map<number, GopJob>();
     for (const seconds of timestampsInSeconds) {
-      const targetTicks = Math.min(Math.max(seconds * timescale, gopStartTicks[0]!), lastTicks);
-      const gopIndex = lastAtOrBefore(gopStartTicks, targetTicks);
-      const sample = nearestSampleInGop(gopIndex, targetTicks);
+      const { gopIndex, presentationMicros } = resolveTarget(seconds);
       const job = byGop.get(gopIndex) ?? { gopIndex, targets: [] };
-      job.targets.push({ requestedSeconds: seconds, presentationMicros: toMicros(presentationTicks[sample]!) });
+      job.targets.push({ requestedSeconds: seconds, presentationMicros });
       byGop.set(gopIndex, job);
     }
 
@@ -159,6 +172,7 @@ export async function createFrameExtractor(options: FrameExtractorOptions): Prom
 
   return {
     sampleTable: table,
+    snapToSampleMicros: (seconds) => resolveTarget(seconds).presentationMicros,
     extract,
     dispose: () => abort.abort(),
   };

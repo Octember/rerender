@@ -73,3 +73,26 @@ for (const layout of ['faststart', 'moovend'] as const) {
 }
 
 console.log('extract-sample-table: PASS');
+
+// snapToSampleMicros: the stable cache key for a requested time. Uses the extractor
+// itself (no decode happens until extract(), so this runs fine in node).
+{
+  const { createFrameExtractor } = await import('../src/extract/extractor');
+  const extractor = await createFrameExtractor({
+    src: 'https://fixture.test/faststart.mp4',
+    fetchFn: fileFetch(join(FIXTURES, 'extract-faststart.mp4')),
+  });
+  const lastMicros = Math.round(
+    (Math.max(...extractor.sampleTable.presentationTicks) / extractor.sampleTable.timescale) * 1_000_000,
+  );
+
+  // 20 fps fixture: samples every 50_000 µs. Nearest-sample rounding in both directions.
+  assert.equal(extractor.snapToSampleMicros(0), 0, 'snap: exact first sample');
+  assert.equal(extractor.snapToSampleMicros(0.26), 250_000, 'snap: rounds up to nearest sample');
+  assert.equal(extractor.snapToSampleMicros(0.22), 200_000, 'snap: rounds down to nearest sample');
+  assert.equal(extractor.snapToSampleMicros(-5), 0, 'snap: clamps below to first sample');
+  assert.equal(extractor.snapToSampleMicros(1e9), lastMicros, 'snap: clamps past end to last sample');
+  assert.equal(extractor.snapToSampleMicros(0.26), extractor.snapToSampleMicros(0.26), 'snap: stable');
+  extractor.dispose();
+  console.log('snapToSampleMicros: PASS');
+}
