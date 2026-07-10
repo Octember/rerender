@@ -27,7 +27,8 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./extract": "./src/extract/index.ts"
   },
   "files": [
     "bin",
@@ -47,14 +48,15 @@
     "dev": "vite",
     "build": "vite build",
     "deploy": "npm run build && npx wrangler deploy",
-    "test": "vite build && tsx test/export.test.ts",
+    "test": "npm run test:extract && vite build && tsx test/export.test.ts",
     "test:export": "tsx test/export.test.ts",
     "typecheck": "tsc --noEmit",
     "lint": "biome lint .",
     "format": "biome check --write .",
     "check": "biome check .",
     "knip": "knip",
-    "publint": "publint"
+    "publint": "publint",
+    "test:extract": "tsx test/extract-sample-table.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-lambda": "^3.1075.0",
