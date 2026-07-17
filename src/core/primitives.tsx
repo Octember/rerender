@@ -1,6 +1,6 @@
 // The primitive vocabulary — real DOM, Remotion-compatible. These are thin wrappers
 // over <div>/<img>/<video>/<audio>, so arbitrary CSS in a composition just works.
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { memo, useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { useCurrentFrame, useIsPlaying, useTimelinePosition, useVideoConfig } from './frame';
 import { registerRenderAsset } from './assets';
 import { continueRender, delayRender } from './delay-render';
@@ -25,6 +25,34 @@ interface MediaProps {
 
 const resolveVolume = (volume: number | ((f: number) => number) | undefined, frame: number): number =>
   typeof volume === 'function' ? volume(frame) : (volume ?? 1);
+
+interface MediaVolumeProps {
+  mediaRef: RefObject<HTMLMediaElement | null>;
+  volume: number | ((frame: number) => number) | undefined;
+}
+
+const ConstantMediaVolume = memo(function ConstantMediaVolume({ mediaRef, volume }: MediaVolumeProps): null {
+  useEffect(() => {
+    if (mediaRef.current) mediaRef.current.volume = (volume as number | undefined) ?? 1;
+  }, [mediaRef, volume]);
+  return null;
+});
+
+const FrameMediaVolume = memo(function FrameMediaVolume({ mediaRef, volume }: MediaVolumeProps): null {
+  const frame = useCurrentFrame();
+  useEffect(() => {
+    if (mediaRef.current) mediaRef.current.volume = (volume as (frame: number) => number)(frame);
+  }, [frame, mediaRef, volume]);
+  return null;
+});
+
+function MediaVolume({ mediaRef, volume }: MediaVolumeProps): JSX.Element {
+  return typeof volume === 'function' ? (
+    <FrameMediaVolume mediaRef={mediaRef} volume={volume} />
+  ) : (
+    <ConstantMediaVolume mediaRef={mediaRef} volume={volume} />
+  );
+}
 
 /** The source frame the media should show at composition frame `frame`. */
 const sourceFrameAt = (frame: number, offset: number, playbackRate: number, trimAfter: number | undefined): number => {
@@ -165,26 +193,29 @@ export function Video({
   }, [frame, playing, fps, offset, playbackRate, trimAfter]);
 
   return (
-    <video
-      ref={ref}
-      src={src}
-      muted={muted}
-      playsInline
-      crossOrigin={crossOrigin}
-      className={className}
-      // Force the playing <video> OFF Chrome's hardware video-overlay plane with an imperceptible
-      // rotation. A hardware overlay must be an axis-aligned rectangle, so ANY rotation (0.04deg
-      // here) demotes the video to a regular composited texture — which then flattens into the
-      // Player container's filtered raster and gets bilinearly sub-pixel down-scaled, instead of
-      // the overlay being presented snapped to whole device pixels (the per-frame shake). The
-      // rotation is sub-0.1px / clipped, and the export ignores it (composites videos by bounding
-      // box, and runs paused). Only applied while playing. (A composition's own style wins below.)
-      style={playing ? { ...style, transform: `${style?.transform ? `${style.transform} ` : ''}rotate(0.04deg)` } : style}
-      onCanPlay={onCanPlay}
-      onError={onError}
-      onSeeking={onSeeking}
-      onSeeked={onSeeked}
-    />
+    <>
+      <video
+        ref={ref}
+        src={src}
+        muted={muted}
+        playsInline
+        crossOrigin={crossOrigin}
+        className={className}
+        // Force the playing <video> OFF Chrome's hardware video-overlay plane with an imperceptible
+        // rotation. A hardware overlay must be an axis-aligned rectangle, so ANY rotation (0.04deg
+        // here) demotes the video to a regular composited texture — which then flattens into the
+        // Player container's filtered raster and gets bilinearly sub-pixel down-scaled, instead of
+        // the overlay being presented snapped to whole device pixels (the per-frame shake). The
+        // rotation is sub-0.1px / clipped, and the export ignores it (composites videos by bounding
+        // box, and runs paused). Only applied while playing. (A composition's own style wins below.)
+        style={playing ? { ...style, transform: `${style?.transform ? `${style.transform} ` : ''}rotate(0.04deg)` } : style}
+        onCanPlay={onCanPlay}
+        onError={onError}
+        onSeeking={onSeeking}
+        onSeeked={onSeeked}
+      />
+      <MediaVolume mediaRef={ref} volume={volume} />
+    </>
   );
 }
 
@@ -230,5 +261,10 @@ export function Audio({
     }
   }, [frame, playing, fps, offset, playbackRate, trimAfter]);
 
-  return <audio ref={ref} src={src} crossOrigin={crossOrigin} />;
+  return (
+    <>
+      <audio ref={ref} src={src} crossOrigin={crossOrigin} />
+      <MediaVolume mediaRef={ref} volume={volume} />
+    </>
+  );
 }
