@@ -172,7 +172,7 @@ async function main(): Promise<void> {
       console.log(`${ok ? '✓' : '✗'} ${name}${ok ? '' : ` — ${detail}`}`);
       if (!ok) failures.push(`${name} (${detail})`);
     };
-    const [gr, gg, gb] = probe.grass;
+    const [_gr, gg, gb] = probe.grass;
     const [wr, wg, wb] = probe.whole;
     check('output mp4 is 1280×720', probe.vw === 1280 && probe.vh === 720, `got ${probe.vw}×${probe.vh}`);
     check('footage shows in the export (grass reads green)', gg > gb && gg > 45, `grass=[${probe.grass}] — opaque-root regression?`);

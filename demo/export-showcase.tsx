@@ -83,7 +83,6 @@ function useNarrow(maxWidth = 640): boolean {
 
 // ── CSS reveal: the actual style object behind one grid cell, so it's obvious the visuals are real DOM/CSS ──
 function CssReveal(): JSX.Element {
-  const k: CSSProperties = { color: '#c678dd' }; // keyword
   const f: CSSProperties = { color: '#61afef' }; // function/name
   const s: CSSProperties = { color: '#98c379' }; // string/value
   const d: CSSProperties = { color: '#5c6370' }; // dim
@@ -452,7 +451,6 @@ export function ExportShowcase(): JSX.Element {
                 </div>
               )}
               {status === 'done' && url && (
-                // biome-ignore lint/a11y/useMediaCaption: a generated demo clip, no captions
                 <video
                   src={url}
                   autoPlay
