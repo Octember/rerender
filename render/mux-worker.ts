@@ -1,9 +1,13 @@
 // Browser-side audio mix + mux. Bundled to an IIFE by esbuild (see src/renderer/audio.ts)
-// and served to the mux browser. An OfflineAudioContext sums the asset audio (each
-// scheduled at its timeline position through a gain node); mediabunny packet-copies the
-// silent video and AAC-encodes the mix into one mp4. window.__mux() returns base64.
+// and served to the mux browser. Each span's source window is decoded via mediabunny's
+// AudioBufferSink — the same decode stack the preview plays through, so a file that
+// previews with sound exports with sound — and an OfflineAudioContext sums the spans
+// (each scheduled at its timeline position through a gain node); mediabunny packet-copies
+// the silent video and AAC-encodes the mix into one mp4. window.__mux() returns base64.
 import { registerAacEncoder } from '@mediabunny/aac-encoder';
 import {
+  ALL_FORMATS,
+  AudioBufferSink,
   AudioBufferSource,
   BufferSource,
   BufferTarget,
@@ -31,27 +35,55 @@ declare global {
 }
 
 async function mux(positions: MuxPosition[], fps: number, codec: VideoCodec, sampleRate: number, durationSec: number): Promise<string> {
-  // 1. Sum every asset's audio into one buffer at its timeline position.
+  // One decoded-audio sink per unique source file, shared by every span that cuts to it.
+  // null = no decodable audio track (e.g. a silent video) — its spans add nothing to the mix.
+  const sinksBySrc = new Map<number, AudioBufferSink | null>();
+  const getAudioSink = async (srcIndex: number): Promise<AudioBufferSink | null> => {
+    const cached = sinksBySrc.get(srcIndex);
+    if (cached !== undefined) return cached;
+    let sink: AudioBufferSink | null = null;
+    try {
+      const bytes = await (await fetch(`/__asset/${srcIndex}`)).arrayBuffer();
+      const input = new Input({ formats: ALL_FORMATS, source: new BufferSource(bytes) });
+      const track = await input.getPrimaryAudioTrack();
+      if (track && (await track.canDecode())) sink = new AudioBufferSink(track);
+    } catch {
+      // Unreadable/unparseable asset — same degraded state as a missing audio track.
+    }
+    sinksBySrc.set(srcIndex, sink);
+    return sink;
+  };
+
+  // 1. Sum every span's audio into one buffer at its timeline position.
   const ctx = new OfflineAudioContext(2, Math.max(1, Math.ceil(durationSec * sampleRate)), sampleRate);
   for (const p of positions) {
-    const data = await (await fetch(`/__asset/${p.assetIndex}`)).arrayBuffer();
-    let buffer: AudioBuffer;
-    try {
-      buffer = await ctx.decodeAudioData(data);
-    } catch {
-      continue; // asset with no decodable audio track (e.g. a silent video)
-    }
-    const node = ctx.createBufferSource();
-    node.buffer = buffer;
-    node.playbackRate.value = p.playbackRate;
+    const sink = await getAudioSink(p.srcIndex);
+    if (!sink) continue;
+
     const gain = ctx.createGain();
     // per-frame volume envelope (fades): schedule each frame's volume at its timeline time.
-    const start = p.startInVideo / fps;
-    for (let i = 0; i < p.volumes.length; i++) gain.gain.setValueAtTime(p.volumes[i]!, start + i / fps);
-    node.connect(gain).connect(ctx.destination);
-    // play `duration` composition-frames of source; at playbackRate that's duration·rate
-    // source-frames, so the clip exactly fills its timeline window.
-    node.start(start, p.trimLeft / fps, (p.duration * p.playbackRate) / fps);
+    const spanStart = p.startInVideo / fps;
+    for (let i = 0; i < p.volumes.length; i++) gain.gain.setValueAtTime(p.volumes[i]!, spanStart + i / fps);
+    gain.connect(ctx.destination);
+
+    // The span plays `duration` composition-frames; at playbackRate that consumes
+    // duration·rate source-frames, so the source window is [trimLeft, trimLeft+duration·rate).
+    // Decode only that window, chunk by chunk; clamp each chunk to the window (the first
+    // decoded chunk can start before it, the last can run past it).
+    const sourceStart = p.trimLeft / fps;
+    const sourceEnd = sourceStart + (p.duration * p.playbackRate) / fps;
+    for await (const { buffer, timestamp } of sink.buffers(sourceStart, sourceEnd)) {
+      const from = Math.max(timestamp, sourceStart);
+      const to = Math.min(timestamp + buffer.duration, sourceEnd);
+      if (to <= from) continue;
+      const node = ctx.createBufferSource();
+      node.buffer = buffer;
+      node.playbackRate.value = p.playbackRate;
+      node.connect(gain);
+      // offset/duration are in source (buffer-content) seconds; `when` is timeline seconds,
+      // so the distance into the source window is divided back by playbackRate.
+      node.start(spanStart + (from - sourceStart) / p.playbackRate, from - timestamp, to - from);
+    }
   }
   const mixed = await ctx.startRendering();
 

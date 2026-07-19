@@ -3,7 +3,8 @@ export type VideoCodec = 'avc' | 'hevc' | 'vp9' | 'av1';
 
 /** One audio asset's placement on the timeline, passed to the in-browser mux worker. */
 export interface MuxPosition {
-  assetIndex: number;
+  /** index into the unique source-file list — spans that reuse a source share one entry. */
+  srcIndex: number;
   startInVideo: number; // composition frame the asset starts at
   duration: number; // frame count
   trimLeft: number; // source-media frame at start
