@@ -63,6 +63,7 @@ function makeFakeExtractor(): {
   };
 
   const extractor = {
+    durationSeconds: 12.5,
     snapToSampleMicros: (seconds: number) => Math.round((seconds * MICROS) / SAMPLE_STEP_MICROS) * SAMPLE_STEP_MICROS,
     extract: (timestampsInSeconds: readonly number[], onFrame: (frame: VideoFrame, requestedSeconds: number) => void) => {
       state.extractCalls.push(timestampsInSeconds.map((s) => s * MICROS));
@@ -193,6 +194,34 @@ describe('createFrameStore', () => {
 
     // 50ms fake grid: 60ms snaps to 50ms.
     assert.equal(store.snapToSampleMicros('src-a', 60_000), 50_000);
+  });
+
+  it('exposes the media duration once the extractor resolves, null before', async () => {
+    const { create } = makeFakeExtractor();
+    const store = createFrameStore({ createExtractor: create });
+
+    assert.equal(store.getMediaDurationSeconds('src-a'), null);
+
+    store.subscribeToExtraction('src-a', [100_000], () => undefined);
+    await flushMicrotasks();
+
+    assert.equal(store.getMediaDurationSeconds('src-a'), 12.5);
+  });
+
+  it("reports a failed extractor setup to subscribeToExtraction's onError, once", async () => {
+    const store = createFrameStore({ createExtractor: () => Promise.reject(new Error('setup failed')) });
+
+    const errors: unknown[] = [];
+    store.subscribeToExtraction(
+      'src-a',
+      [100_000],
+      () => undefined,
+      (error) => errors.push(error),
+    );
+    await flushMicrotasks();
+
+    assert.equal(errors.length, 1);
+    assert.equal((errors[0] as Error).message, 'setup failed');
   });
 
   it('retries extraction on a later subscription after a decode failure', async () => {

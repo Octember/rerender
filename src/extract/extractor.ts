@@ -18,6 +18,9 @@ export type OnFrame = (frame: VideoFrame, requestedSeconds: number) => void;
 
 export interface FrameExtractor {
   readonly sampleTable: SampleTable;
+  /** Presentation time of the last displayed frame, in seconds — the media's duration
+   *  (loop points and end-of-clip clamping key off this, not the container's stated duration). */
+  readonly durationSeconds: number;
   /**
    * Presentation timestamp (µs) of the sample nearest a requested time — the exact
    * `VideoFrame.timestamp` that `extract` would deliver for it. Stable across calls,
@@ -172,6 +175,7 @@ export async function createFrameExtractor(options: FrameExtractorOptions): Prom
 
   return {
     sampleTable: table,
+    durationSeconds: lastTicks / timescale,
     snapToSampleMicros: (seconds) => resolveTarget(seconds).presentationMicros,
     extract,
     dispose: () => abort.abort(),

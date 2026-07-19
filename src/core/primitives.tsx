@@ -35,7 +35,7 @@ const sourceFrameAt = (frame: number, offset: number, playbackRate: number, trim
 // During render, register a media asset for the audio mix (one entry per frame the element
 // is mounted), carrying the resolved per-frame volume + the source position. No-op in the
 // player. The id keys on (type, src, offset) so distinct clips of the same source stay separate.
-function useRenderAsset(type: 'audio' | 'video', src: string, opts: { offset: number; playbackRate: number; volume: number }): void {
+export function useRenderAsset(type: 'audio' | 'video', src: string, opts: { offset: number; playbackRate: number; volume: number }): void {
   const frame = useCurrentFrame();
   const timeline = useTimelinePosition();
   if (typeof window !== 'undefined' && window.__rerenderEnv === 'rendering') {
@@ -107,7 +107,7 @@ export function Img({ onLoad, onError, ...props }: React.ImgHTMLAttributes<HTMLI
   );
 }
 
-interface VideoProps extends MediaProps {
+export interface VideoProps extends MediaProps {
   muted?: boolean;
   className?: string;
   style?: CSSProperties;
@@ -192,7 +192,7 @@ export function Video({
 // captures the real <video> element instead, so the frame-synced <Video> is the same thing.
 export const OffthreadVideo = Video;
 
-interface AudioProps extends MediaProps {
+export interface AudioProps extends MediaProps {
   /** player-only: route through the Web Audio API. rerender renders audio via the muxer, so
    *  this is a no-op during render. */
   useWebAudioApi?: boolean;
