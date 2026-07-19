@@ -24,8 +24,17 @@ const closeFrame = (frame: VideoFrame | null | undefined) => {
 };
 
 export interface FrameStore {
-  subscribeToExtraction: (src: string, timestamps: number[], onFrame: (frame: VideoFrame) => void) => () => void;
+  subscribeToExtraction: (
+    src: string,
+    timestamps: number[],
+    onFrame: (frame: VideoFrame) => void,
+    /** Called once if the src's extractor setup fails (bad network, unsupported/malformed
+     *  file). Never called for a src that has already resolved successfully. */
+    onError?: (error: unknown) => void,
+  ) => () => void;
   getClosestCachedFrame: (src: string, targetTimestamp: number) => ClosestCachedFrame | null;
+  /** The media's duration in seconds, or null until the src's extractor has resolved. */
+  getMediaDurationSeconds: (src: string) => number | null;
   /**
    * The exact frame timestamp (µs) extraction delivers for a requested time —
    * the slot's frame identity — or null until the src's extractor has
@@ -98,7 +107,7 @@ export const createFrameStore = (options?: FrameStoreOptions): FrameStore => {
     return extractor.snapToSampleMicros(timestampMicros / MICROSECONDS);
   };
 
-  const subscribeToExtraction: FrameStore['subscribeToExtraction'] = (src, timestamps, onFrame) => {
+  const subscribeToExtraction: FrameStore['subscribeToExtraction'] = (src, timestamps, onFrame, onError) => {
     if (disposed) {
       return NOOP_CLEANUP;
     }
@@ -227,9 +236,10 @@ export const createFrameStore = (options?: FrameStoreOptions): FrameStore => {
             }
           });
       })
-      .catch(() => {
+      .catch((error) => {
         // Extraction failure leaves slots unfilled — the consumer's owned
         // degraded state. A later subscription (scroll, zoom) retries.
+        onError?.(error);
       });
 
     return () => {
@@ -240,6 +250,7 @@ export const createFrameStore = (options?: FrameStoreOptions): FrameStore => {
   return {
     subscribeToExtraction,
     getClosestCachedFrame: (src, targetTimestamp) => frameCache.getClosest(src, targetTimestamp),
+    getMediaDurationSeconds: (src) => readyExtractorsBySrc.get(src)?.durationSeconds ?? null,
     snapToSampleMicros,
     markCachedFrameUsed: (key) => frameCache.markUsed(key),
     pruneCachedFrames: () => frameCache.pruneOld(),
