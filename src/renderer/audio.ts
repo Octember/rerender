@@ -1,10 +1,10 @@
 // Audio assembly — turn per-frame collected assets into timeline positions, then mix
 // + mux into the silent video, entirely in the browser (Web Audio + WebCodecs +
 // mediabunny), no ffmpeg. Mirrors @remotion/renderer's calculateAssetPositions and the
-// atrim/adelay/volume → amix pass: each asset becomes a buffer source scheduled at
-// start(when=startInVideo/fps, offset=trimLeft/fps, duration), through a gain node, all
-// summed by an OfflineAudioContext; the mix is AAC-encoded and muxed alongside the
-// (packet-copied) video. POC: scalar volume, playbackRate 1.
+// atrim/adelay/volume → amix pass: each span's source window is decoded via mediabunny
+// (the same stack the preview plays through) and scheduled through a gain node carrying
+// its per-frame volume envelope, all summed by an OfflineAudioContext; the mix is
+// AAC-encoded and muxed alongside the (packet-copied) video.
 import { copyFileSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { CollectedAsset } from '../core/assets';
@@ -80,14 +80,25 @@ export async function muxAudio(
     return;
   }
   const durationSec = Math.max(videoDurationSec, ...positions.map((p) => (p.startInVideo + p.duration) / fps));
-  const muxPositions: MuxPosition[] = positions.map((p, i) => ({
-    assetIndex: i,
-    startInVideo: p.startInVideo,
-    duration: p.duration,
-    trimLeft: p.trimLeft,
-    volumes: p.volumes,
-    playbackRate: p.playbackRate,
-  }));
+  // Spans that reuse a source file share one /__asset entry, so the worker parses and
+  // decodes each file once no matter how many timeline cuts point at it.
+  const uniqueSrcs: string[] = [];
+  const srcIndexBySrc = new Map<string, number>();
+  const muxPositions: MuxPosition[] = positions.map((p) => {
+    let srcIndex = srcIndexBySrc.get(p.src);
+    if (srcIndex === undefined) {
+      srcIndex = uniqueSrcs.push(p.src) - 1;
+      srcIndexBySrc.set(p.src, srcIndex);
+    }
+    return {
+      srcIndex,
+      startInVideo: p.startInVideo,
+      duration: p.duration,
+      trimLeft: p.trimLeft,
+      volumes: p.volumes,
+      playbackRate: p.playbackRate,
+    };
+  });
 
   const worker = await spawnWorkerBrowser(await chromeExecutable(), MUX_WORKER, (pathname, res) => {
     if (pathname === '/__silent') {
@@ -96,8 +107,9 @@ export async function muxAudio(
       return true;
     }
     const m = pathname.match(/^\/__asset\/(\d+)$/);
-    if (m && positions[Number(m[1])]) {
-      res.end(readFileSync(positions[Number(m[1])]!.src));
+    const src = m && uniqueSrcs[Number(m[1])];
+    if (src) {
+      res.end(readFileSync(src));
       return true;
     }
     return false;
