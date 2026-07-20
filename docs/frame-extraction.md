@@ -77,12 +77,21 @@ Self-contained: no imports from the rest of rerender, no dependencies, browser-o
 ```ts
 import { createFrameExtractor } from 'rerender/extract';
 
-const extractor = await createFrameExtractor({ src: url });
+// signal (optional) is a LIFETIME signal — aborting it is equivalent to dispose(),
+// so tie it to the owner (e.g. component unmount). Don't pass AbortSignal.timeout
+// here: it would kill the extractor at T even after a successful setup.
+const owner = new AbortController();
+const extractor = await createFrameExtractor({ src: url, signal: owner.signal });
 // timestamps in seconds; frames arrive as they decode, not necessarily in request order
-await extractor.extract([0, 1.5, 3.0], (frame /* VideoFrame */, requestedSeconds) => {
-  ctx.drawImage(frame, x, 0, w, h);
-  frame.close(); // receiver owns the frame
-});
+await extractor.extract(
+  [0, 1.5, 3.0],
+  (frame /* VideoFrame */, requestedSeconds) => {
+    ctx.drawImage(frame, x, 0, w, h);
+    frame.close(); // receiver owns the frame
+  },
+  // per-call signal (optional) cancels this call's fetches/decodes; the extractor stays usable
+  { signal: AbortSignal.timeout(30_000) },
+);
 extractor.dispose();
 ```
 
@@ -93,6 +102,14 @@ Design rules:
   one callback (duplicates after clamping share a decoded frame via per-target callbacks).
 - The caller owns delivered frames (`close()` them); everything else is closed internally.
 - `extract()` is safe to call repeatedly and concurrently; the sample table is built once.
+- Aborting (dispose, extractor signal, or per-call signal) settles the affected `extract()`
+  promises promptly with the abort reason and eagerly closes their decoders — no call ever
+  hangs past its signal.
+- To bound **setup only**, abort a dedicated controller from a timer you clear once
+  `createFrameExtractor` settles; per-call `extract()` signals can be plain
+  `AbortSignal.timeout(...)` since each call composes its own signal.
+- Passing a signal (extractor-level or per-call) uses `AbortSignal.any` (Chrome 116+,
+  Safari 17.4+, Node 20.3+); signal-free usage never touches it.
 
 ## Frame store (batteries included)
 

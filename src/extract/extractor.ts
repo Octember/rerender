@@ -8,10 +8,23 @@ import { createUrlSource, type RangeSource } from './source';
 
 export interface FrameExtractorOptions {
   src: string;
+  /**
+   * Cancels setup and all in-flight work when aborted — same effect as dispose().
+   * Tie it to the extractor's lifetime (e.g. component unmount). To bound setup
+   * only, don't pass AbortSignal.timeout (it would kill the extractor at T even
+   * after a successful setup) — abort a dedicated controller from a timer you
+   * clear once createFrameExtractor settles.
+   */
+  signal?: AbortSignal;
   /** Injectable for tests; defaults to global fetch. */
   fetchFn?: typeof fetch;
   /** Max GOP fetches in flight per extract() call. */
   maxParallelFetches?: number;
+}
+
+export interface ExtractOptions {
+  /** Cancels this call's fetches and decodes when aborted; the extractor stays usable. */
+  signal?: AbortSignal;
 }
 
 export type OnFrame = (frame: VideoFrame, requestedSeconds: number) => void;
@@ -30,10 +43,11 @@ export interface FrameExtractor {
   /**
    * Decodes the frame nearest each requested timestamp and delivers it via `onFrame`.
    * Frames arrive as they decode (not in request order); the receiver owns each frame
-   * and must `close()` it. Resolves when every requested timestamp has been delivered.
+   * and must `close()` it. Resolves when every requested timestamp has been delivered;
+   * rejects promptly (closing this call's decoders) when `options.signal` aborts.
    */
-  extract(timestampsInSeconds: readonly number[], onFrame: OnFrame): Promise<void>;
-  /** Aborts in-flight work. The extractor is unusable afterwards. */
+  extract(timestampsInSeconds: readonly number[], onFrame: OnFrame, options?: ExtractOptions): Promise<void>;
+  /** Aborts in-flight work and closes decoders. The extractor is unusable afterwards. */
   dispose(): void;
 }
 
@@ -57,10 +71,30 @@ interface GopJob {
   targets: { requestedSeconds: number; presentationMicros: number }[];
 }
 
+/**
+ * Resolve `promise`, then fail if `signal` aborted while it settled. Every abortable
+ * read must come through here: a read can settle with bytes in the same tick its
+ * signal aborts, and abort events are not replayed, so any listener registered after
+ * the await would never fire and downstream work would run against a dead signal.
+ * (Explicit aborted/reason check, not throwIfAborted — Chrome 94–99 has WebCodecs
+ * but not that method, and this also runs on signal-free paths.)
+ */
+async function resolveUnlessAborted<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  const value = await promise;
+  if (signal.aborted) throw signal.reason;
+  return value;
+}
+
 export async function createFrameExtractor(options: FrameExtractorOptions): Promise<FrameExtractor> {
   const abort = new AbortController();
+  // dispose() and the caller's signal compose into one extractor-level signal.
+  // AbortSignal.any covers a pre-aborted caller signal and detaches cleanly — a
+  // manual listener on a long-lived caller signal would pin the internal
+  // controller past dispose().
+  const extractorSignal = options.signal ? AbortSignal.any([abort.signal, options.signal]) : abort.signal;
   const source: RangeSource = createUrlSource(options.src, options.fetchFn);
-  const table = parseSampleTable(await source.readThroughMoov(abort.signal));
+  const moovBytes = await resolveUnlessAborted(source.readThroughMoov(extractorSignal), extractorSignal);
+  const table = parseSampleTable(moovBytes);
   const { presentationTicks, byteOffsets, byteSizes, keySampleIndices, timescale } = table;
   const maxParallel = options.maxParallelFetches ?? 4;
 
@@ -84,12 +118,12 @@ export async function createFrameExtractor(options: FrameExtractorOptions): Prom
     return best;
   };
 
-  const decodeGop = async (job: GopJob, onFrame: OnFrame): Promise<void> => {
+  const decodeGop = async (job: GopJob, onFrame: OnFrame, signal: AbortSignal): Promise<void> => {
     const first = keySampleIndices[job.gopIndex]!;
     const end = job.gopIndex + 1 < keySampleIndices.length ? keySampleIndices[job.gopIndex + 1]! : table.sampleCount;
     const rangeStart = byteOffsets[first]!;
     const rangeEnd = byteOffsets[end - 1]! + byteSizes[end - 1]!;
-    const bytes = await source.read(rangeStart, rangeEnd, abort.signal);
+    const bytes = await resolveUnlessAborted(source.read(rangeStart, rangeEnd, signal), signal);
 
     // presentation µs → requested seconds still waiting on that frame
     const wanted = new Map<number, number[]>();
@@ -99,28 +133,42 @@ export async function createFrameExtractor(options: FrameExtractorOptions): Prom
       wanted.set(target.presentationMicros, list);
     }
 
-    let removeAbortListener: () => void = () => undefined;
-    try {
-      await new Promise<void>((resolve, reject) => {
-        const decoder = new VideoDecoder({
-          output: (frame) => {
-            const requesters = wanted.get(frame.timestamp);
-            if (!requesters) {
-              frame.close();
-              return;
-            }
-            wanted.delete(frame.timestamp);
-            for (let i = 0; i < requesters.length; i++) {
-              // Last requester gets the frame itself; earlier ones get clones. Receiver closes all.
-              onFrame(i === requesters.length - 1 ? frame : frame.clone(), requesters[i]!);
-            }
-            if (wanted.size === 0) resolve();
-          },
-          error: reject,
-        });
-        const onAbort = () => reject(new Error('frame extractor disposed'));
-        abort.signal.addEventListener('abort', onAbort, { once: true });
-        removeAbortListener = () => abort.signal.removeEventListener('abort', onAbort);
+    await new Promise<void>((resolve, reject) => {
+      const decoder = new VideoDecoder({
+        output: (frame) => {
+          const requesters = wanted.get(frame.timestamp);
+          if (!requesters) {
+            frame.close();
+            return;
+          }
+          wanted.delete(frame.timestamp);
+          for (let i = 0; i < requesters.length; i++) {
+            // Last requester gets the frame itself; earlier ones get clones. Receiver closes all.
+            onFrame(i === requesters.length - 1 ? frame : frame.clone(), requesters[i]!);
+          }
+          // Early resolve keeps GOP pipelining: the worker moves on while the
+          // flush drains. The abort listener stays armed until the flush-side
+          // close — the decoder can outlive this promise.
+          if (wanted.size === 0) resolve();
+        },
+        error: reject,
+      });
+      const closeDecoder = () => {
+        try {
+          decoder.close();
+        } catch {
+          // already closed
+        }
+      };
+      const onAbort = () => {
+        // Close eagerly: a wedged decode never settles flush(), so waiting for
+        // the flush-side close would leak the hardware decoder past the abort.
+        closeDecoder();
+        reject(signal.reason);
+      };
+      signal.addEventListener('abort', onAbort, { once: true });
+      const detach = () => signal.removeEventListener('abort', onAbort);
+      try {
         decoder.configure({ codec: table.codec, description: table.description });
         for (let i = first; i < end; i++) {
           decoder.decode(
@@ -131,22 +179,25 @@ export async function createFrameExtractor(options: FrameExtractorOptions): Prom
             }),
           );
         }
-        decoder
-          .flush()
-          .then(() => {
-            if (wanted.size > 0) reject(new Error(`decoder flushed with ${wanted.size} requested timestamps undelivered`));
-          }, reject)
-          .finally(() => {
-            try {
-              decoder.close();
-            } catch {
-              // already closed by an error path
-            }
-          });
-      });
-    } finally {
-      removeAbortListener();
-    }
+      } catch (error) {
+        detach();
+        closeDecoder();
+        throw error;
+      }
+      // The decoder-lifecycle finally owns both the close and the listener
+      // removal, so an abort can reach a still-open decoder even after the
+      // early resolve above. Aborting closes the decoder, which settles a
+      // pending flush, which runs this cleanup.
+      decoder
+        .flush()
+        .then(() => {
+          if (wanted.size > 0) reject(new Error(`decoder flushed with ${wanted.size} requested timestamps undelivered`));
+        }, reject)
+        .finally(() => {
+          closeDecoder();
+          detach();
+        });
+    });
   };
 
   const resolveTarget = (seconds: number): { gopIndex: number; presentationMicros: number } => {
@@ -155,8 +206,9 @@ export async function createFrameExtractor(options: FrameExtractorOptions): Prom
     return { gopIndex, presentationMicros: toMicros(presentationTicks[nearestSampleInGop(gopIndex, targetTicks)]!) };
   };
 
-  const extract: FrameExtractor['extract'] = async (timestampsInSeconds, onFrame) => {
-    if (abort.signal.aborted) throw new Error('frame extractor disposed');
+  const extract: FrameExtractor['extract'] = async (timestampsInSeconds, onFrame, extractOptions) => {
+    const signal = extractOptions?.signal ? AbortSignal.any([extractorSignal, extractOptions.signal]) : extractorSignal;
+    if (signal.aborted) throw signal.reason;
     const byGop = new Map<number, GopJob>();
     for (const seconds of timestampsInSeconds) {
       const { gopIndex, presentationMicros } = resolveTarget(seconds);
@@ -168,7 +220,7 @@ export async function createFrameExtractor(options: FrameExtractorOptions): Prom
     // Bounded parallelism without a scheduler dependency: N workers draining a shared queue.
     const queue = Array.from(byGop.values());
     const workers = Array.from({ length: Math.min(maxParallel, queue.length) }, async () => {
-      for (let job = queue.shift(); job; job = queue.shift()) await decodeGop(job, onFrame);
+      for (let job = queue.shift(); job; job = queue.shift()) await decodeGop(job, onFrame, signal);
     });
     await Promise.all(workers);
   };
@@ -178,6 +230,6 @@ export async function createFrameExtractor(options: FrameExtractorOptions): Prom
     durationSeconds: lastTicks / timescale,
     snapToSampleMicros: (seconds) => resolveTarget(seconds).presentationMicros,
     extract,
-    dispose: () => abort.abort(),
+    dispose: () => abort.abort(new Error('frame extractor disposed')),
   };
 }
