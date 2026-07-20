@@ -77,12 +77,18 @@ Self-contained: no imports from the rest of rerender, no dependencies, browser-o
 ```ts
 import { createFrameExtractor } from 'rerender/extract';
 
-const extractor = await createFrameExtractor({ src: url });
+// signal (optional) cancels setup and everything after it — same effect as dispose()
+const extractor = await createFrameExtractor({ src: url, signal: AbortSignal.timeout(30_000) });
 // timestamps in seconds; frames arrive as they decode, not necessarily in request order
-await extractor.extract([0, 1.5, 3.0], (frame /* VideoFrame */, requestedSeconds) => {
-  ctx.drawImage(frame, x, 0, w, h);
-  frame.close(); // receiver owns the frame
-});
+await extractor.extract(
+  [0, 1.5, 3.0],
+  (frame /* VideoFrame */, requestedSeconds) => {
+    ctx.drawImage(frame, x, 0, w, h);
+    frame.close(); // receiver owns the frame
+  },
+  // per-call signal (optional) cancels this call's fetches/decodes; the extractor stays usable
+  { signal: AbortSignal.timeout(30_000) },
+);
 extractor.dispose();
 ```
 
@@ -93,6 +99,9 @@ Design rules:
   one callback (duplicates after clamping share a decoded frame via per-target callbacks).
 - The caller owns delivered frames (`close()` them); everything else is closed internally.
 - `extract()` is safe to call repeatedly and concurrently; the sample table is built once.
+- Aborting (dispose, extractor signal, or per-call signal) settles the affected `extract()`
+  promises promptly with the abort reason and eagerly closes their decoders — no call ever
+  hangs past its signal.
 
 ## Frame store (batteries included)
 

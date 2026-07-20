@@ -3,7 +3,7 @@
 // See docs/frame-extraction.md for the architecture and benchmarks.
 
 export { createFrameExtractor } from './extractor';
-export type { FrameExtractor, FrameExtractorOptions, OnFrame } from './extractor';
+export type { ExtractOptions, FrameExtractor, FrameExtractorOptions, OnFrame } from './extractor';
 export { createFrameStore } from './frame-store';
 export type { FrameStore, FrameStoreOptions } from './frame-store';
 export { FrameCache } from './frame-cache';

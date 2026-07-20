@@ -8,10 +8,17 @@ import { createUrlSource, type RangeSource } from './source';
 
 export interface FrameExtractorOptions {
   src: string;
+  /** Cancels setup and all in-flight work when aborted — same effect as dispose(). */
+  signal?: AbortSignal;
   /** Injectable for tests; defaults to global fetch. */
   fetchFn?: typeof fetch;
   /** Max GOP fetches in flight per extract() call. */
   maxParallelFetches?: number;
+}
+
+export interface ExtractOptions {
+  /** Cancels this call's fetches and decodes when aborted; the extractor stays usable. */
+  signal?: AbortSignal;
 }
 
 export type OnFrame = (frame: VideoFrame, requestedSeconds: number) => void;
@@ -30,10 +37,11 @@ export interface FrameExtractor {
   /**
    * Decodes the frame nearest each requested timestamp and delivers it via `onFrame`.
    * Frames arrive as they decode (not in request order); the receiver owns each frame
-   * and must `close()` it. Resolves when every requested timestamp has been delivered.
+   * and must `close()` it. Resolves when every requested timestamp has been delivered;
+   * rejects promptly (closing this call's decoders) when `options.signal` aborts.
    */
-  extract(timestampsInSeconds: readonly number[], onFrame: OnFrame): Promise<void>;
-  /** Aborts in-flight work. The extractor is unusable afterwards. */
+  extract(timestampsInSeconds: readonly number[], onFrame: OnFrame, options?: ExtractOptions): Promise<void>;
+  /** Aborts in-flight work and closes decoders. The extractor is unusable afterwards. */
   dispose(): void;
 }
 
@@ -59,6 +67,11 @@ interface GopJob {
 
 export async function createFrameExtractor(options: FrameExtractorOptions): Promise<FrameExtractor> {
   const abort = new AbortController();
+  const external = options.signal;
+  if (external) {
+    if (external.aborted) abort.abort(external.reason);
+    else external.addEventListener('abort', () => abort.abort(external.reason), { once: true });
+  }
   const source: RangeSource = createUrlSource(options.src, options.fetchFn);
   const table = parseSampleTable(await source.readThroughMoov(abort.signal));
   const { presentationTicks, byteOffsets, byteSizes, keySampleIndices, timescale } = table;
@@ -84,12 +97,12 @@ export async function createFrameExtractor(options: FrameExtractorOptions): Prom
     return best;
   };
 
-  const decodeGop = async (job: GopJob, onFrame: OnFrame): Promise<void> => {
+  const decodeGop = async (job: GopJob, onFrame: OnFrame, signal: AbortSignal): Promise<void> => {
     const first = keySampleIndices[job.gopIndex]!;
     const end = job.gopIndex + 1 < keySampleIndices.length ? keySampleIndices[job.gopIndex + 1]! : table.sampleCount;
     const rangeStart = byteOffsets[first]!;
     const rangeEnd = byteOffsets[end - 1]! + byteSizes[end - 1]!;
-    const bytes = await source.read(rangeStart, rangeEnd, abort.signal);
+    const bytes = await source.read(rangeStart, rangeEnd, signal);
 
     // presentation µs → requested seconds still waiting on that frame
     const wanted = new Map<number, number[]>();
@@ -118,9 +131,18 @@ export async function createFrameExtractor(options: FrameExtractorOptions): Prom
           },
           error: reject,
         });
-        const onAbort = () => reject(new Error('frame extractor disposed'));
-        abort.signal.addEventListener('abort', onAbort, { once: true });
-        removeAbortListener = () => abort.signal.removeEventListener('abort', onAbort);
+        const onAbort = () => {
+          // Close eagerly: a wedged decode never settles flush(), so waiting for
+          // the flush-side close would leak the hardware decoder past the abort.
+          try {
+            decoder.close();
+          } catch {
+            // already closed
+          }
+          reject(signal.reason ?? new Error('frame extractor disposed'));
+        };
+        signal.addEventListener('abort', onAbort, { once: true });
+        removeAbortListener = () => signal.removeEventListener('abort', onAbort);
         decoder.configure({ codec: table.codec, description: table.description });
         for (let i = first; i < end; i++) {
           decoder.decode(
@@ -155,8 +177,9 @@ export async function createFrameExtractor(options: FrameExtractorOptions): Prom
     return { gopIndex, presentationMicros: toMicros(presentationTicks[nearestSampleInGop(gopIndex, targetTicks)]!) };
   };
 
-  const extract: FrameExtractor['extract'] = async (timestampsInSeconds, onFrame) => {
-    if (abort.signal.aborted) throw new Error('frame extractor disposed');
+  const extract: FrameExtractor['extract'] = async (timestampsInSeconds, onFrame, extractOptions) => {
+    const signal = extractOptions?.signal ? AbortSignal.any([abort.signal, extractOptions.signal]) : abort.signal;
+    if (signal.aborted) throw signal.reason ?? new Error('frame extractor disposed');
     const byGop = new Map<number, GopJob>();
     for (const seconds of timestampsInSeconds) {
       const { gopIndex, presentationMicros } = resolveTarget(seconds);
@@ -168,7 +191,7 @@ export async function createFrameExtractor(options: FrameExtractorOptions): Prom
     // Bounded parallelism without a scheduler dependency: N workers draining a shared queue.
     const queue = Array.from(byGop.values());
     const workers = Array.from({ length: Math.min(maxParallel, queue.length) }, async () => {
-      for (let job = queue.shift(); job; job = queue.shift()) await decodeGop(job, onFrame);
+      for (let job = queue.shift(); job; job = queue.shift()) await decodeGop(job, onFrame, signal);
     });
     await Promise.all(workers);
   };
@@ -178,6 +201,6 @@ export async function createFrameExtractor(options: FrameExtractorOptions): Prom
     durationSeconds: lastTicks / timescale,
     snapToSampleMicros: (seconds) => resolveTarget(seconds).presentationMicros,
     extract,
-    dispose: () => abort.abort(),
+    dispose: () => abort.abort(new Error('frame extractor disposed')),
   };
 }
