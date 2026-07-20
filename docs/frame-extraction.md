@@ -77,8 +77,11 @@ Self-contained: no imports from the rest of rerender, no dependencies, browser-o
 ```ts
 import { createFrameExtractor } from 'rerender/extract';
 
-// signal (optional) cancels setup and everything after it — same effect as dispose()
-const extractor = await createFrameExtractor({ src: url, signal: AbortSignal.timeout(30_000) });
+// signal (optional) is a LIFETIME signal — aborting it is equivalent to dispose(),
+// so tie it to the owner (e.g. component unmount). Don't pass AbortSignal.timeout
+// here: it would kill the extractor at T even after a successful setup.
+const owner = new AbortController();
+const extractor = await createFrameExtractor({ src: url, signal: owner.signal });
 // timestamps in seconds; frames arrive as they decode, not necessarily in request order
 await extractor.extract(
   [0, 1.5, 3.0],
@@ -102,6 +105,11 @@ Design rules:
 - Aborting (dispose, extractor signal, or per-call signal) settles the affected `extract()`
   promises promptly with the abort reason and eagerly closes their decoders — no call ever
   hangs past its signal.
+- To bound **setup only**, abort a dedicated controller from a timer you clear once
+  `createFrameExtractor` settles; per-call `extract()` signals can be plain
+  `AbortSignal.timeout(...)` since each call composes its own signal.
+- Signal support uses `AbortSignal.any`/`throwIfAborted` (Chrome 116+, Safari 17.4+,
+  Node 20.3+); code paths without signals don't touch either.
 
 ## Frame store (batteries included)
 

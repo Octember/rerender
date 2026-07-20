@@ -8,7 +8,13 @@ import { createUrlSource, type RangeSource } from './source';
 
 export interface FrameExtractorOptions {
   src: string;
-  /** Cancels setup and all in-flight work when aborted — same effect as dispose(). */
+  /**
+   * Cancels setup and all in-flight work when aborted — same effect as dispose().
+   * Tie it to the extractor's lifetime (e.g. component unmount). To bound setup
+   * only, don't pass AbortSignal.timeout (it would kill the extractor at T even
+   * after a successful setup) — abort a dedicated controller from a timer you
+   * clear once createFrameExtractor settles.
+   */
   signal?: AbortSignal;
   /** Injectable for tests; defaults to global fetch. */
   fetchFn?: typeof fetch;

@@ -70,6 +70,20 @@ function fileFetch(path: string, opts?: { holdFromCall?: number; settleOnAbortFr
   await assert.rejects(pending, (error: unknown) => error === reason);
 }
 
+// The extractor-level signal is a LIFETIME signal: aborting it after a successful
+// setup disposes the extractor — later calls reject with the caller's reason.
+{
+  const { fetchFn } = fileFetch(FIXTURE);
+  const controller = new AbortController();
+  const extractor = await createFrameExtractor({ src: SRC, fetchFn, signal: controller.signal });
+  const reason = new Error('owner unmounted');
+  controller.abort(reason);
+  await assert.rejects(
+    extractor.extract([0], () => assert.fail('no frames expected')),
+    (error: unknown) => error === reason,
+  );
+}
+
 // Setup that settles WITH bytes in the same tick the signal aborts must reject —
 // never resolve an already-dead extractor.
 {
