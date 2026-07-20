@@ -133,37 +133,42 @@ export async function createFrameExtractor(options: FrameExtractorOptions): Prom
       wanted.set(target.presentationMicros, list);
     }
 
-    let removeAbortListener: () => void = () => undefined;
-    try {
-      await new Promise<void>((resolve, reject) => {
-        const decoder = new VideoDecoder({
-          output: (frame) => {
-            const requesters = wanted.get(frame.timestamp);
-            if (!requesters) {
-              frame.close();
-              return;
-            }
-            wanted.delete(frame.timestamp);
-            for (let i = 0; i < requesters.length; i++) {
-              // Last requester gets the frame itself; earlier ones get clones. Receiver closes all.
-              onFrame(i === requesters.length - 1 ? frame : frame.clone(), requesters[i]!);
-            }
-            if (wanted.size === 0) resolve();
-          },
-          error: reject,
-        });
-        const onAbort = () => {
-          // Close eagerly: a wedged decode never settles flush(), so waiting for
-          // the flush-side close would leak the hardware decoder past the abort.
-          try {
-            decoder.close();
-          } catch {
-            // already closed
+    await new Promise<void>((resolve, reject) => {
+      const decoder = new VideoDecoder({
+        output: (frame) => {
+          const requesters = wanted.get(frame.timestamp);
+          if (!requesters) {
+            frame.close();
+            return;
           }
-          reject(signal.reason);
-        };
-        signal.addEventListener('abort', onAbort, { once: true });
-        removeAbortListener = () => signal.removeEventListener('abort', onAbort);
+          wanted.delete(frame.timestamp);
+          for (let i = 0; i < requesters.length; i++) {
+            // Last requester gets the frame itself; earlier ones get clones. Receiver closes all.
+            onFrame(i === requesters.length - 1 ? frame : frame.clone(), requesters[i]!);
+          }
+          // Early resolve keeps GOP pipelining: the worker moves on while the
+          // flush drains. The abort listener stays armed until the flush-side
+          // close — the decoder can outlive this promise.
+          if (wanted.size === 0) resolve();
+        },
+        error: reject,
+      });
+      const closeDecoder = () => {
+        try {
+          decoder.close();
+        } catch {
+          // already closed
+        }
+      };
+      const onAbort = () => {
+        // Close eagerly: a wedged decode never settles flush(), so waiting for
+        // the flush-side close would leak the hardware decoder past the abort.
+        closeDecoder();
+        reject(signal.reason);
+      };
+      signal.addEventListener('abort', onAbort, { once: true });
+      const detach = () => signal.removeEventListener('abort', onAbort);
+      try {
         decoder.configure({ codec: table.codec, description: table.description });
         for (let i = first; i < end; i++) {
           decoder.decode(
@@ -174,22 +179,25 @@ export async function createFrameExtractor(options: FrameExtractorOptions): Prom
             }),
           );
         }
-        decoder
-          .flush()
-          .then(() => {
-            if (wanted.size > 0) reject(new Error(`decoder flushed with ${wanted.size} requested timestamps undelivered`));
-          }, reject)
-          .finally(() => {
-            try {
-              decoder.close();
-            } catch {
-              // already closed by an error path
-            }
-          });
-      });
-    } finally {
-      removeAbortListener();
-    }
+      } catch (error) {
+        detach();
+        closeDecoder();
+        throw error;
+      }
+      // The decoder-lifecycle finally owns both the close and the listener
+      // removal, so an abort can reach a still-open decoder even after the
+      // early resolve above. Aborting closes the decoder, which settles a
+      // pending flush, which runs this cleanup.
+      decoder
+        .flush()
+        .then(() => {
+          if (wanted.size > 0) reject(new Error(`decoder flushed with ${wanted.size} requested timestamps undelivered`));
+        }, reject)
+        .finally(() => {
+          closeDecoder();
+          detach();
+        });
+    });
   };
 
   const resolveTarget = (seconds: number): { gopIndex: number; presentationMicros: number } => {
