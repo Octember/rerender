@@ -71,6 +71,20 @@ interface GopJob {
   targets: { requestedSeconds: number; presentationMicros: number }[];
 }
 
+/**
+ * Resolve `promise`, then fail if `signal` aborted while it settled. Every abortable
+ * read must come through here: a read can settle with bytes in the same tick its
+ * signal aborts, and abort events are not replayed, so any listener registered after
+ * the await would never fire and downstream work would run against a dead signal.
+ * (Explicit aborted/reason check, not throwIfAborted — Chrome 94–99 has WebCodecs
+ * but not that method, and this also runs on signal-free paths.)
+ */
+async function resolveUnlessAborted<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  const value = await promise;
+  if (signal.aborted) throw signal.reason;
+  return value;
+}
+
 export async function createFrameExtractor(options: FrameExtractorOptions): Promise<FrameExtractor> {
   const abort = new AbortController();
   // dispose() and the caller's signal compose into one extractor-level signal.
@@ -79,10 +93,7 @@ export async function createFrameExtractor(options: FrameExtractorOptions): Prom
   // controller past dispose().
   const extractorSignal = options.signal ? AbortSignal.any([abort.signal, options.signal]) : abort.signal;
   const source: RangeSource = createUrlSource(options.src, options.fetchFn);
-  const moovBytes = await source.readThroughMoov(extractorSignal);
-  // The read can settle in the same tick the signal aborts (abort events are not
-  // replayed) — reject rather than resolve an already-dead extractor.
-  if (extractorSignal.aborted) throw extractorSignal.reason;
+  const moovBytes = await resolveUnlessAborted(source.readThroughMoov(extractorSignal), extractorSignal);
   const table = parseSampleTable(moovBytes);
   const { presentationTicks, byteOffsets, byteSizes, keySampleIndices, timescale } = table;
   const maxParallel = options.maxParallelFetches ?? 4;
@@ -112,12 +123,7 @@ export async function createFrameExtractor(options: FrameExtractorOptions): Prom
     const end = job.gopIndex + 1 < keySampleIndices.length ? keySampleIndices[job.gopIndex + 1]! : table.sampleCount;
     const rangeStart = byteOffsets[first]!;
     const rangeEnd = byteOffsets[end - 1]! + byteSizes[end - 1]!;
-    const bytes = await source.read(rangeStart, rangeEnd, signal);
-    // The read can settle in the same tick the signal aborts; abort events are
-    // not replayed, so registering onAbort below would never fire. Bail before
-    // touching the decoder. (Explicit check, not throwIfAborted — Chrome 94–99
-    // has WebCodecs but not that method, and this path runs signal-free too.)
-    if (signal.aborted) throw signal.reason;
+    const bytes = await resolveUnlessAborted(source.read(rangeStart, rangeEnd, signal), signal);
 
     // presentation µs → requested seconds still waiting on that frame
     const wanted = new Map<number, number[]>();
