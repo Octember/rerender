@@ -1,0 +1,37 @@
+# Publishes to npm with provenance on every v* tag push, after re-running the fast
+# verification gate. Requires the NPM_TOKEN repo secret (an npm automation token for
+# an account with publish rights on the package name).
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  id-token: write # npm provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          registry-url: 'https://registry.npmjs.org'
+      - run: npm ci
+      - name: Verify
+        run: npm run typecheck && npm run check && npm run test:extract && npm run build:lib && npm run publint && npm run attw
+      - name: Tag matches package version
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if [ "v$PKG_VERSION" != "$GITHUB_REF_NAME" ]; then
+            echo "tag $GITHUB_REF_NAME does not match package version v$PKG_VERSION"
+            exit 1
+          fi
+      - name: Publish (prepack builds dist + runs the license guard)
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

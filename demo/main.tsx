@@ -18,7 +18,7 @@ createRoot(root).render(
         <span style={{ fontSize: 22, fontWeight: 800, letterSpacing: -0.5 }}>rerender</span>
         <span style={{ fontSize: 13, color: '#8a8a99' }}>a drop-in, MIT-licensed Remotion alternative</span>
         <a
-          href="https://github.com/Octember/rerender"
+          href="https://github.com/bevyl-ai/rerender"
           target="_blank"
           rel="noopener noreferrer"
           style={{
