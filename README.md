@@ -84,7 +84,11 @@ API surface covers hooks, primitives, timing, and composition registration.
 [rerender.video](https://rerender.video) is the live demo: watch a composition render itself to
 `.mp4`, in the browser, with no server round trip.
 
-Not yet published to npm. Clone the repo and `npm install` from source.
+```sh
+npm install rerender   # ships dist ESM + types; src is included for bundler-alias setups
+```
+
+Requires Node >=20.3 for the CLI; `react`/`react-dom` >=18 are peer dependencies.
 
 ## License
 

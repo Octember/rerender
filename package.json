@@ -1,16 +1,16 @@
 {
   "name": "rerender",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Drop-in, MIT-licensed Remotion alternative. Renders real DOM to MP4 with WebCodecs and mediabunny, in a browser tab or fanned across parallel headless-Chrome workers. No ffmpeg.",
   "license": "MIT",
   "author": "Noah Lindner",
   "homepage": "https://rerender.video",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Octember/rerender.git"
+    "url": "git+https://github.com/bevyl-ai/rerender.git"
   },
   "bugs": {
-    "url": "https://github.com/Octember/rerender/issues"
+    "url": "https://github.com/bevyl-ai/rerender/issues"
   },
   "keywords": [
     "remotion",
@@ -22,18 +22,30 @@
     "renderer"
   ],
   "type": "module",
-  "private": true,
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./package.json": "./package.json",
-    "./extract": "./src/extract/index.ts",
-    "./media-parser": "./src/media-parser/index.ts",
-    "./media": "./src/media/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./extract": {
+      "types": "./dist/extract.d.ts",
+      "default": "./dist/extract.js"
+    },
+    "./media-parser": {
+      "types": "./dist/media-parser.d.ts",
+      "default": "./dist/media-parser.js"
+    },
+    "./media": {
+      "types": "./dist/media.d.ts",
+      "default": "./dist/media.js"
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "bin",
+    "dist",
     "src",
     "render",
     "cloud",
@@ -58,7 +70,10 @@
     "check": "biome check .",
     "knip": "knip",
     "publint": "publint",
-    "test:extract": "tsx test/extract-sample-table.test.ts && tsx test/extract-abort.test.ts && tsx test/frame-store.test.ts"
+    "test:extract": "tsx test/extract-sample-table.test.ts && tsx test/extract-abort.test.ts && tsx test/frame-store.test.ts",
+    "build:lib": "tsup && node scripts/check-dist.mjs",
+    "prepack": "npm run build:lib",
+    "attw": "attw --pack . --profile esm-only"
   },
   "dependencies": {
     "@aws-sdk/client-lambda": "^3.1075.0",
@@ -71,20 +86,29 @@
     "esbuild": "^0.28.1",
     "mediabunny": "^1.49.0",
     "puppeteer-core": "^25.2.1",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
     "tsx": "^4.22.4",
     "vite": "^6.4.3",
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
     "@biomejs/biome": "^2.5.1",
     "@types/node": "^26.0.1",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "knip": "^6.23.0",
     "publint": "^0.3.21",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "remotion": "^4.0.484",
+    "tsup": "^8.5.1",
     "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=20.3"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
   }
 }
