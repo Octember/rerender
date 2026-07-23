@@ -49,10 +49,7 @@ const live = new Map<symbol, { node: AudioBufferSourceNode; gain: GainNode }>();
 // player's frame clock read from this, so audio and video share one clock (no wall-vs-audio drift).
 let anchor: { ctxTime: number; frame: number } | null = null;
 
-export function isAnchored(): boolean {
-  return anchor !== null;
-}
-/** The play anchor, for the player's audio-as-master-clock. */
+/** The play anchor, for the player's audio-as-master-clock (null when not playing). */
 export function getAnchor(): { ctxTime: number; frame: number } | null {
   return anchor;
 }
@@ -82,7 +79,14 @@ export function stopPlayback(): void {
 function stopOne(id: symbol): void {
   const l = live.get(id);
   if (!l) return;
-  try { l.node.onended = null; l.node.stop(); l.node.disconnect(); l.gain.disconnect(); } catch { /* already stopped */ }
+  try {
+    l.node.onended = null;
+    l.node.stop();
+    l.node.disconnect();
+    l.gain.disconnect();
+  } catch {
+    /* already stopped */
+  }
   live.delete(id);
 }
 function stopAllLive(): void {
@@ -97,9 +101,7 @@ function scheduleOne(id: symbol, reg: ClipReg): void {
   const rate = reg.playbackRate || 1;
   // No trimAfter → play from the in-point to the end of the source; the Sequence unmounting the
   // clip (which unregisters it) clamps it to the actual timeline window.
-  const effDur = Number.isFinite(reg.durFrames)
-    ? reg.durFrames
-    : Math.max(0, (reg.buffer.duration * fps - reg.trimBefore) / rate);
+  const effDur = Number.isFinite(reg.durFrames) ? reg.durFrames : Math.max(0, (reg.buffer.duration * fps - reg.trimBefore) / rate);
   const startCtx = anchor.ctxTime + (reg.fromFrame - anchor.frame) / fps;
   const endCtx = startCtx + effDur / fps;
   const now = c.currentTime;
@@ -122,12 +124,21 @@ function scheduleOne(id: symbol, reg: ClipReg): void {
   try {
     node.start(when, Math.max(0, intoSec), Math.max(0, srcDurSec));
   } catch {
-    try { gain.disconnect(); } catch { /* noop */ }
+    try {
+      gain.disconnect();
+    } catch {
+      /* noop */
+    }
     return;
   }
   const rec = { node, gain };
   node.onended = () => {
-    try { node.disconnect(); gain.disconnect(); } catch { /* noop */ }
+    try {
+      node.disconnect();
+      gain.disconnect();
+    } catch {
+      /* noop */
+    }
     if (live.get(id) === rec) live.delete(id);
   };
   live.set(id, rec);

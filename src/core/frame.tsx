@@ -24,10 +24,6 @@ export const PlayingContext = createContext<boolean>(false);
 /** The absolute composition frame — NOT shifted by <Sequence> (unlike FrameContext).
  *  Audio/Video assets use it to place themselves on the render timeline. */
 export const TimelineContext = createContext<number>(0);
-/** True while a <Sequence> is premounting this subtree (mounted early to preload, before its
- *  window). Media should warm (load + seek to the in-point) but NOT play audibly — otherwise a
- *  premounted <Audio> plays its opening early and overlaps the clip still on screen. */
-export const PremountContext = createContext<boolean>(false);
 /** Absolute timeline start frame of the enclosing <Sequence> chain. Media uses it to schedule
  *  itself on the player timeline even while premounting, when the shifted frame is clamped to 0. */
 export const SequenceFromContext = createContext<number>(0);
@@ -36,7 +32,6 @@ export const useCurrentFrame = (): number => useContext(FrameContext);
 export const useVideoConfig = (): VideoConfig => useContext(ConfigContext);
 export const useIsPlaying = (): boolean => useContext(PlayingContext);
 export const useTimelinePosition = (): number => useContext(TimelineContext);
-export const useIsPremounting = (): boolean => useContext(PremountContext);
 
 /** Render a composition at a single frame, inside the contexts that drive it — the shared
  *  unit behind the headless Stage (render/stage) and the client-side exporter (client/export). */
@@ -97,11 +92,9 @@ export function Sequence({
   if (local < 0) {
     return (
       <SequenceFromContext.Provider value={absFrom}>
-        <PremountContext.Provider value={true}>
-          <FrameContext.Provider value={0}>
-            <div style={{ opacity: 0, pointerEvents: 'none' }}>{children}</div>
-          </FrameContext.Provider>
-        </PremountContext.Provider>
+        <FrameContext.Provider value={0}>
+          <div style={{ opacity: 0, pointerEvents: 'none' }}>{children}</div>
+        </FrameContext.Provider>
       </SequenceFromContext.Provider>
     );
   }
