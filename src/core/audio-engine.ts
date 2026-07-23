@@ -6,7 +6,12 @@
 // once, then place each clip's slice at a precise AudioContext time relative to a play-anchor.
 // Web Audio's start(when, offset, duration) is sample-accurate, so handoffs are gapless with no
 // per-clip play() latency. Preview-only; the render path still muxes from useRenderAsset.
-import { useEffect, useRef } from 'react';
+//
+// The AudioContext and decode cache are process-global (shared decoding is idempotent and one
+// context is enough), but the play state — anchor + registry + live nodes — is PER PLAYER, via
+// createPlaybackEngine(). Two players on the page (e.g. an onboarding carousel) each own an engine,
+// so one starting playback can't restomp another's anchor or reschedule its clips.
+import { createContext, useContext, useEffect, useRef } from 'react';
 
 let ctx: AudioContext | null = null;
 export function getCtx(): AudioContext {
@@ -18,7 +23,7 @@ export function resumeCtx(): void {
   if (c.state === 'suspended') void c.resume();
 }
 
-// Decode each URL exactly once; clips of the same source share the AudioBuffer.
+// Decode each URL exactly once; clips of the same source (across every engine) share the AudioBuffer.
 const decodeCache = new Map<string, Promise<AudioBuffer>>();
 export function decode(url: string): Promise<AudioBuffer> {
   let p = decodeCache.get(url);
@@ -43,111 +48,129 @@ export interface ClipReg {
   fps: number;
 }
 
-const registry = new Map<symbol, ClipReg>();
-const live = new Map<symbol, { node: AudioBufferSourceNode; gain: GainNode }>();
+/** Anchor: AudioContext time + player frame at the instant playback began, plus the whole-timeline
+ *  playback rate (e.g. a 2x eval preview). The player's frame clock can read this for an
+ *  audio-as-master clock (no wall-vs-audio drift). */
+export type PlaybackAnchor = { ctxTime: number; frame: number; rate: number };
 
-// Anchor: AudioContext time + player frame at the instant playback began, plus the whole-timeline
-// playback rate (e.g. a 2x eval preview). Every clip and the player's frame clock read from this,
-// so audio and video share one clock (no wall-vs-audio drift).
-let anchor: { ctxTime: number; frame: number; rate: number } | null = null;
-
-/** The play anchor, for the player's audio-as-master-clock (null when not playing). */
-export function getAnchor(): { ctxTime: number; frame: number; rate: number } | null {
-  return anchor;
+/** One player's scheduler. Owns its anchor + registered clips + live nodes; shares the global
+ *  AudioContext and decode cache with every other engine. */
+export interface PlaybackEngine {
+  /** Register (or update) a clip. If playback is anchored, (re)schedule it immediately — this is
+   *  how a clip that mounts mid-playback (its premount window) gets scheduled ahead of its cut. */
+  register(id: symbol, reg: ClipReg): void;
+  unregister(id: symbol): void;
+  /** (Re)anchor and schedule every registered clip. Called on play, loop, seek-while-playing, and a
+   *  playback-rate change. `rate` is the whole-timeline speed (1 = real-time). */
+  beginPlayback(frame: number, rate?: number): void;
+  stopPlayback(): void;
+  /** The play anchor (null when not playing). */
+  getAnchor(): PlaybackAnchor | null;
 }
 
-/** Register (or update) a clip. If playback is anchored, (re)schedule it immediately — this is how
- *  a clip that mounts mid-playback (its premount window) gets scheduled ahead of its cut. */
-export function register(id: symbol, reg: ClipReg): void {
-  registry.set(id, reg);
-  if (anchor) scheduleOne(id, reg);
-}
-export function unregister(id: symbol): void {
-  registry.delete(id);
-  stopOne(id);
-}
+export function createPlaybackEngine(): PlaybackEngine {
+  const registry = new Map<symbol, ClipReg>();
+  const live = new Map<symbol, { node: AudioBufferSourceNode; gain: GainNode }>();
+  let anchor: PlaybackAnchor | null = null;
 
-/** (Re)anchor and schedule every registered clip. Called on play, loop, seek-while-playing, and a
- *  playback-rate change. `rate` is the whole-timeline speed (1 = real-time). */
-export function beginPlayback(frame: number, rate = 1): void {
-  stopAllLive();
-  anchor = { ctxTime: getCtx().currentTime, frame, rate };
-  for (const [id, reg] of registry) scheduleOne(id, reg);
-}
-export function stopPlayback(): void {
-  anchor = null;
-  stopAllLive();
-}
-
-function stopOne(id: symbol): void {
-  const l = live.get(id);
-  if (!l) return;
-  try {
-    l.node.onended = null;
-    l.node.stop();
-    l.node.disconnect();
-    l.gain.disconnect();
-  } catch {
-    /* already stopped */
-  }
-  live.delete(id);
-}
-function stopAllLive(): void {
-  for (const id of [...live.keys()]) stopOne(id);
-}
-
-function scheduleOne(id: symbol, reg: ClipReg): void {
-  if (!anchor) return;
-  stopOne(id); // replace any prior scheduling for this clip
-  const c = getCtx();
-  const { fps } = reg;
-  const rate = reg.playbackRate || 1;
-  const compRate = anchor.rate || 1; // whole-timeline preview speed (e.g. a 2x eval player)
-  const timeScale = fps * compRate; // timeline frames advance this many per real second
-  // No trimAfter → play from the in-point to the end of the source; the Sequence unmounting the
-  // clip (which unregisters it) clamps it to the actual timeline window.
-  const effDur = Number.isFinite(reg.durFrames) ? reg.durFrames : Math.max(0, (reg.buffer.duration * fps - reg.trimBefore) / rate);
-  const startCtx = anchor.ctxTime + (reg.fromFrame - anchor.frame) / timeScale;
-  const endCtx = startCtx + effDur / timeScale;
-  const now = c.currentTime;
-  if (endCtx <= now + 0.02) return; // already finished
-
-  // If the clip already began (we're mid-slice, e.g. after a seek), jump in at the right offset.
-  const when = startCtx >= now ? startCtx : now;
-  const framesElapsed = startCtx >= now ? 0 : (now - startCtx) * timeScale;
-  const intoSec = (reg.trimBefore + framesElapsed * rate) / fps; // source seconds to start at
-  const remainingTimelineFrames = effDur - framesElapsed;
-  const srcDurSec = (remainingTimelineFrames * rate) / fps; // source seconds to consume
-
-  const gain = c.createGain();
-  applyVolume(gain, reg.volume, timeScale, when, framesElapsed, effDur);
-  const node = c.createBufferSource();
-  node.buffer = reg.buffer;
-  node.playbackRate.value = rate * compRate; // source rate × whole-timeline rate
-  node.connect(gain);
-  gain.connect(c.destination);
-  try {
-    node.start(when, Math.max(0, intoSec), Math.max(0, srcDurSec));
-  } catch {
+  function stopOne(id: symbol): void {
+    const l = live.get(id);
+    if (!l) return;
     try {
-      gain.disconnect();
+      l.node.onended = null;
+      l.node.stop();
+      l.node.disconnect();
+      l.gain.disconnect();
     } catch {
-      /* noop */
+      /* already stopped */
     }
-    return;
+    live.delete(id);
   }
-  const rec = { node, gain };
-  node.onended = () => {
+  function stopAllLive(): void {
+    for (const id of [...live.keys()]) stopOne(id);
+  }
+
+  function scheduleOne(id: symbol, reg: ClipReg): void {
+    if (!anchor) return;
+    stopOne(id); // replace any prior scheduling for this clip
+    const c = getCtx();
+    const { fps } = reg;
+    const rate = reg.playbackRate || 1;
+    const compRate = anchor.rate || 1; // whole-timeline preview speed (e.g. a 2x eval player)
+    const timeScale = fps * compRate; // timeline frames advance this many per real second
+    // No trimAfter → play from the in-point to the end of the source; the Sequence unmounting the
+    // clip (which unregisters it) clamps it to the actual timeline window.
+    const effDur = Number.isFinite(reg.durFrames) ? reg.durFrames : Math.max(0, (reg.buffer.duration * fps - reg.trimBefore) / rate);
+    const startCtx = anchor.ctxTime + (reg.fromFrame - anchor.frame) / timeScale;
+    const endCtx = startCtx + effDur / timeScale;
+    const now = c.currentTime;
+    if (endCtx <= now + 0.02) return; // already finished
+
+    // If the clip already began (we're mid-slice, e.g. after a seek), jump in at the right offset.
+    const when = startCtx >= now ? startCtx : now;
+    const framesElapsed = startCtx >= now ? 0 : (now - startCtx) * timeScale;
+    const intoSec = (reg.trimBefore + framesElapsed * rate) / fps; // source seconds to start at
+    const remainingTimelineFrames = effDur - framesElapsed;
+    const srcDurSec = (remainingTimelineFrames * rate) / fps; // source seconds to consume
+
+    const gain = c.createGain();
+    applyVolume(gain, reg.volume, timeScale, when, framesElapsed, effDur);
+    const node = c.createBufferSource();
+    node.buffer = reg.buffer;
+    node.playbackRate.value = rate * compRate; // source rate × whole-timeline rate
+    node.connect(gain);
+    gain.connect(c.destination);
     try {
-      node.disconnect();
-      gain.disconnect();
+      node.start(when, Math.max(0, intoSec), Math.max(0, srcDurSec));
     } catch {
-      /* noop */
+      try {
+        gain.disconnect();
+      } catch {
+        /* noop */
+      }
+      return;
     }
-    if (live.get(id) === rec) live.delete(id);
+    const rec = { node, gain };
+    node.onended = () => {
+      try {
+        node.disconnect();
+        gain.disconnect();
+      } catch {
+        /* noop */
+      }
+      if (live.get(id) === rec) live.delete(id);
+    };
+    live.set(id, rec);
+  }
+
+  return {
+    register(id, reg) {
+      registry.set(id, reg);
+      if (anchor) scheduleOne(id, reg);
+    },
+    unregister(id) {
+      registry.delete(id);
+      stopOne(id);
+    },
+    beginPlayback(frame, rate = 1) {
+      stopAllLive();
+      anchor = { ctxTime: getCtx().currentTime, frame, rate };
+      for (const [id, reg] of registry) scheduleOne(id, reg);
+    },
+    stopPlayback() {
+      anchor = null;
+      stopAllLive();
+    },
+    getAnchor() {
+      return anchor;
+    },
   };
-  live.set(id, rec);
 }
+
+/** The per-player engine, provided by whatever mounts the player. `null` (the default) means no
+ *  scheduler is present — a consumer should fall back to its non-rerender audio path. */
+export const EngineContext = createContext<PlaybackEngine | null>(null);
+export const useEngine = (): PlaybackEngine | null => useContext(EngineContext);
 
 // Constant → set the gain. Per-frame function → automate the gain along the clip so fades play
 // exactly as they render (sampled per frame, capped so a long clip doesn't create endless points).
@@ -188,11 +211,11 @@ export interface AudioClipInput {
   rendering?: boolean;
 }
 
-/** Bind one audio clip to the scheduler for its lifetime: decode-on-mount (warms its premount
- *  window), then register while playback is active and unregister on unmount/stop. This is the
- *  whole client contract — a consumer supplies values and renders nothing; it never touches the
- *  decode/register/unregister lifecycle itself. */
-export function useAudioClip(input: AudioClipInput): void {
+/** Bind one audio clip to `engine` for its lifetime: decode-on-mount (warms its premount window),
+ *  then register while playback is active and unregister on unmount/stop. This is the whole client
+ *  contract — a consumer supplies the engine + values and renders nothing. A null engine (no player
+ *  scheduler in context) is a no-op, so the consumer's non-rerender path stays authoritative. */
+export function useAudioClip(engine: PlaybackEngine | null, input: AudioClipInput): void {
   const { src, playing, fromFrame, trimBefore, durFrames, playbackRate, volume, fps, rendering = false } = input;
 
   // volume may be a fresh inline fade function each render; keep it in a ref so its identity
@@ -205,22 +228,22 @@ export function useAudioClip(input: AudioClipInput): void {
 
   // Warm: decode the source the moment this clip mounts (including its premount window).
   useEffect(() => {
-    if (!rendering) void decode(src).catch(() => undefined);
-  }, [src, rendering]);
+    if (engine && !rendering) void decode(src).catch(() => undefined);
+  }, [engine, src, rendering]);
 
-  // Register with the scheduler while playback is active; register() (re)schedules on
-  // play/loop/seek. Unregister on unmount.
+  // Register with the engine while playback is active; register() (re)schedules on play/loop/seek.
+  // Unregister on unmount.
   useEffect(() => {
-    if (rendering || !playing) return undefined;
+    if (!engine || rendering || !playing) return undefined;
     const id = idRef.current as symbol;
     let cancelled = false;
     void decode(src).then((buffer) => {
       if (cancelled) return;
-      register(id, { buffer, fromFrame, trimBefore, durFrames, playbackRate, volume: volumeRef.current ?? 1, fps });
+      engine.register(id, { buffer, fromFrame, trimBefore, durFrames, playbackRate, volume: volumeRef.current ?? 1, fps });
     });
     return () => {
       cancelled = true;
-      unregister(id);
+      engine.unregister(id);
     };
-  }, [playing, src, fromFrame, trimBefore, durFrames, playbackRate, fps, rendering]);
+  }, [engine, playing, src, fromFrame, trimBefore, durFrames, playbackRate, fps, rendering]);
 }

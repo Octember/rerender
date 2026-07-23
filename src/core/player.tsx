@@ -2,9 +2,19 @@
 // native resolution, scales it to fit, drives the frame clock, and exposes the imperative
 // PlayerRef (seekTo / play / pause / getCurrentFrame / addEventListener…) that an editor's
 // playback transport drives. What plays here is exactly what the recorder records.
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type ComponentType, type CSSProperties } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentType,
+  type CSSProperties,
+} from 'react';
 import { ConfigContext, FrameContext, PlayingContext, TimelineContext, type VideoConfig } from './frame';
-import { beginPlayback, getAnchor, getCtx, resumeCtx, stopPlayback } from './audio-engine';
+import { createPlaybackEngine, EngineContext, getCtx, resumeCtx } from './audio-engine';
 import { injectRerenderCSS } from './default-css';
 
 injectRerenderCSS(); // match Remotion's global reset so preview == render == Remotion
@@ -116,6 +126,9 @@ export const Player = forwardRef<PlayerRef, PlayerProps>(function Player(props, 
   const rafRef = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const listeners = useRef(new Map<PlayerEventTypes, Set<CallbackListener<unknown>>>());
+  // This player's own scheduler — provided to the composition so its <Audio> clips bind here, not
+  // to some other player on the page.
+  const engine = useMemo(() => createPlaybackEngine(), []);
 
   const scale = displayHeight / compHeight;
   const displayWidth = compWidth * scale;
@@ -144,13 +157,13 @@ export const Player = forwardRef<PlayerRef, PlayerProps>(function Player(props, 
       // resumeCtx runs inside the play call (a user gesture) so autoplay policy is satisfied.
       if (value) {
         resumeCtx();
-        beginPlayback(frameRef.current, playbackRate);
+        engine.beginPlayback(frameRef.current, playbackRate);
       } else {
-        stopPlayback();
+        engine.stopPlayback();
       }
       emit(value ? 'play' : 'pause', undefined);
     },
-    [emit, playbackRate],
+    [emit, engine, playbackRate],
   );
 
   // The rAF clock: advance the frame at fps·playbackRate while playing; loop or fire `ended`.
@@ -164,7 +177,7 @@ export const Player = forwardRef<PlayerRef, PlayerProps>(function Player(props, 
       // Commit only WHOLE frames during playback, like @remotion/player's floored clock. The rAF
       // fires ~60x/s but we re-render the React tree (and thus re-evaluate the Ken Burns transform
       // on the <video>) only when the integer frame changes — i.e. at fps.
-      const aud = getAnchor();
+      const aud = engine.getAnchor();
       const raw = aud
         ? aud.frame + (getCtx().currentTime - aud.ctxTime) * fps * playbackRate
         : anchor.f + ((performance.now() - anchor.t) / 1000) * fps * playbackRate;
@@ -172,7 +185,7 @@ export const Player = forwardRef<PlayerRef, PlayerProps>(function Player(props, 
         if (loop) {
           anchor = { t: performance.now(), f: 0 };
           commitFrame(0);
-          beginPlayback(0, playbackRate); // re-anchor audio + reschedule clips from frame 0
+          engine.beginPlayback(0, playbackRate); // re-anchor audio + reschedule clips from frame 0
         } else {
           commitFrame(durationInFrames - 1);
           setPlaying(false);
@@ -188,7 +201,7 @@ export const Player = forwardRef<PlayerRef, PlayerProps>(function Player(props, 
     };
     rafRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [playing, fps, durationInFrames, playbackRate, loop, moveToBeginningWhenEnded, commitFrame, setPlaying, emit]);
+  }, [playing, fps, durationInFrames, playbackRate, loop, moveToBeginningWhenEnded, commitFrame, setPlaying, emit, engine]);
 
   useImperativeHandle(
     ref,
@@ -271,15 +284,17 @@ export const Player = forwardRef<PlayerRef, PlayerProps>(function Player(props, 
             filter: 'opacity(0.999)',
           }}
         >
-          <ConfigContext.Provider value={config}>
-            <PlayingContext.Provider value={playing}>
-              <TimelineContext.Provider value={frame}>
-                <FrameContext.Provider value={frame}>
-                  <Composition {...inputProps} />
-                </FrameContext.Provider>
-              </TimelineContext.Provider>
-            </PlayingContext.Provider>
-          </ConfigContext.Provider>
+          <EngineContext.Provider value={engine}>
+            <ConfigContext.Provider value={config}>
+              <PlayingContext.Provider value={playing}>
+                <TimelineContext.Provider value={frame}>
+                  <FrameContext.Provider value={frame}>
+                    <Composition {...inputProps} />
+                  </FrameContext.Provider>
+                </TimelineContext.Provider>
+              </PlayingContext.Provider>
+            </ConfigContext.Provider>
+          </EngineContext.Provider>
         </div>
       </div>
 

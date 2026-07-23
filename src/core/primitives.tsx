@@ -2,7 +2,7 @@
 // over <div>/<img>/<video>/<audio>, so arbitrary CSS in a composition just works.
 import { memo, useCallback, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { SequenceFromContext, useCurrentFrame, useIsPlaying, useTimelinePosition, useVideoConfig } from './frame';
-import { useAudioClip } from './audio-engine';
+import { useAudioClip, useEngine } from './audio-engine';
 import { registerRenderAsset } from './assets';
 import { continueRender, delayRender } from './delay-render';
 
@@ -257,8 +257,9 @@ export function Audio({
   const durFrames = trimAfter !== undefined ? Math.max(0, trimAfter - offset) : Number.POSITIVE_INFINITY;
 
   // The scheduler owns the decode/register/unregister lifecycle; the primitive just reads the
-  // frame context and hands it values.
-  useAudioClip({ src, playing, fromFrame: from, trimBefore: offset, durFrames, playbackRate, volume: volume ?? 1, fps, rendering });
+  // frame context + this player's engine and hands them values.
+  const engine = useEngine();
+  useAudioClip(engine, { src, playing, fromFrame: from, trimBefore: offset, durFrames, playbackRate, volume: volume ?? 1, fps, rendering });
 
   return null;
 }
