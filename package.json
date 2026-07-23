@@ -41,7 +41,8 @@
       "types": "./dist/media.d.ts",
       "default": "./dist/media.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./audio-engine": "./src/core/audio-engine.ts"
   },
   "files": [
     "bin",
