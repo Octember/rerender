@@ -2,7 +2,7 @@
 // over <div>/<img>/<video>/<audio>, so arbitrary CSS in a composition just works.
 import { memo, useCallback, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { SequenceFromContext, useCurrentFrame, useIsPlaying, useTimelinePosition, useVideoConfig } from './frame';
-import { decode, register, unregister } from './audio-engine';
+import { useAudioClip } from './audio-engine';
 import { registerRenderAsset } from './assets';
 import { continueRender, delayRender } from './delay-render';
 
@@ -256,34 +256,9 @@ export function Audio({
   const rendering = typeof window !== 'undefined' && (window as unknown as { __rerenderEnv?: string }).__rerenderEnv === 'rendering';
   const durFrames = trimAfter !== undefined ? Math.max(0, trimAfter - offset) : Number.POSITIVE_INFINITY;
 
-  // volume may be a fresh inline fade function each render; keep it in a ref so its identity
-  // doesn't re-trigger the schedule effect (which would restart the source every frame).
-  const volumeRef = useRef(volume);
-  volumeRef.current = volume;
-
-  const idRef = useRef<symbol>();
-  if (!idRef.current) idRef.current = Symbol('rerender-audio-clip');
-
-  // Warm: decode the source the moment this clip mounts (including its premount window).
-  useEffect(() => {
-    if (!rendering) void decode(src).catch(() => undefined);
-  }, [src, rendering]);
-
-  // Register with the scheduler while playback is active; it schedules (and reschedules on
-  // play/loop/seek). Unregister on unmount.
-  useEffect(() => {
-    if (rendering || !playing) return undefined;
-    const id = idRef.current as symbol;
-    let cancelled = false;
-    void decode(src).then((buffer) => {
-      if (cancelled) return;
-      register(id, { buffer, fromFrame: from, trimBefore: offset, durFrames, playbackRate, volume: volumeRef.current ?? 1, fps });
-    });
-    return () => {
-      cancelled = true;
-      unregister(id);
-    };
-  }, [playing, src, from, offset, durFrames, playbackRate, fps, rendering]);
+  // The scheduler owns the decode/register/unregister lifecycle; the primitive just reads the
+  // frame context and hands it values.
+  useAudioClip({ src, playing, fromFrame: from, trimBefore: offset, durFrames, playbackRate, volume: volume ?? 1, fps, rendering });
 
   return null;
 }

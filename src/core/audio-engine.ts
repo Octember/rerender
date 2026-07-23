@@ -6,6 +6,7 @@
 // once, then place each clip's slice at a precise AudioContext time relative to a play-anchor.
 // Web Audio's start(when, offset, duration) is sample-accurate, so handoffs are gapless with no
 // per-clip play() latency. Preview-only; the render path still muxes from useRenderAsset.
+import { useEffect, useRef } from 'react';
 
 let ctx: AudioContext | null = null;
 export function getCtx(): AudioContext {
@@ -165,4 +166,57 @@ function applyVolume(
   for (let f = startFrame + step; f <= endFrame; f += step) {
     p.linearRampToValueAtTime(Math.max(0, volume(f)), whenCtx + (f - startFrame) / fps);
   }
+}
+
+/** The values one audio clip needs to bind to the scheduler. All plain — the caller reads them
+ *  from whatever frame source it lives under (rerender's <Audio> reads rerender context; an
+ *  embedding in another player, e.g. @remotion/player, reads that player's context). */
+export interface AudioClipInput {
+  src: string;
+  playing: boolean;
+  fromFrame: number; // absolute timeline start frame
+  trimBefore: number; // source in-point, frames
+  durFrames: number; // clip length on the timeline, frames (Infinity → to source end)
+  playbackRate: number;
+  volume: number | ((frame: number) => number);
+  fps: number;
+  /** render pass: skip Web Audio entirely — the render muxes from useRenderAsset instead. */
+  rendering?: boolean;
+}
+
+/** Bind one audio clip to the scheduler for its lifetime: decode-on-mount (warms its premount
+ *  window), then register while playback is active and unregister on unmount/stop. This is the
+ *  whole client contract — a consumer supplies values and renders nothing; it never touches the
+ *  decode/register/unregister lifecycle itself. */
+export function useAudioClip(input: AudioClipInput): void {
+  const { src, playing, fromFrame, trimBefore, durFrames, playbackRate, volume, fps, rendering = false } = input;
+
+  // volume may be a fresh inline fade function each render; keep it in a ref so its identity
+  // doesn't re-trigger the schedule effect (which would restart the source every frame).
+  const volumeRef = useRef(volume);
+  volumeRef.current = volume;
+
+  const idRef = useRef<symbol | null>(null);
+  if (!idRef.current) idRef.current = Symbol('rerender-audio-clip');
+
+  // Warm: decode the source the moment this clip mounts (including its premount window).
+  useEffect(() => {
+    if (!rendering) void decode(src).catch(() => undefined);
+  }, [src, rendering]);
+
+  // Register with the scheduler while playback is active; register() (re)schedules on
+  // play/loop/seek. Unregister on unmount.
+  useEffect(() => {
+    if (rendering || !playing) return undefined;
+    const id = idRef.current as symbol;
+    let cancelled = false;
+    void decode(src).then((buffer) => {
+      if (cancelled) return;
+      register(id, { buffer, fromFrame, trimBefore, durFrames, playbackRate, volume: volumeRef.current ?? 1, fps });
+    });
+    return () => {
+      cancelled = true;
+      unregister(id);
+    };
+  }, [playing, src, fromFrame, trimBefore, durFrames, playbackRate, fps, rendering]);
 }
