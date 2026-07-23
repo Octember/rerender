@@ -46,12 +46,13 @@ export interface ClipReg {
 const registry = new Map<symbol, ClipReg>();
 const live = new Map<symbol, { node: AudioBufferSourceNode; gain: GainNode }>();
 
-// Anchor: AudioContext time + player frame at the instant playback began. Every clip and the
-// player's frame clock read from this, so audio and video share one clock (no wall-vs-audio drift).
-let anchor: { ctxTime: number; frame: number } | null = null;
+// Anchor: AudioContext time + player frame at the instant playback began, plus the whole-timeline
+// playback rate (e.g. a 2x eval preview). Every clip and the player's frame clock read from this,
+// so audio and video share one clock (no wall-vs-audio drift).
+let anchor: { ctxTime: number; frame: number; rate: number } | null = null;
 
 /** The play anchor, for the player's audio-as-master-clock (null when not playing). */
-export function getAnchor(): { ctxTime: number; frame: number } | null {
+export function getAnchor(): { ctxTime: number; frame: number; rate: number } | null {
   return anchor;
 }
 
@@ -66,10 +67,11 @@ export function unregister(id: symbol): void {
   stopOne(id);
 }
 
-/** (Re)anchor and schedule every registered clip. Called on play, loop, and seek-while-playing. */
-export function beginPlayback(frame: number, _fps: number): void {
+/** (Re)anchor and schedule every registered clip. Called on play, loop, seek-while-playing, and a
+ *  playback-rate change. `rate` is the whole-timeline speed (1 = real-time). */
+export function beginPlayback(frame: number, rate = 1): void {
   stopAllLive();
-  anchor = { ctxTime: getCtx().currentTime, frame };
+  anchor = { ctxTime: getCtx().currentTime, frame, rate };
   for (const [id, reg] of registry) scheduleOne(id, reg);
 }
 export function stopPlayback(): void {
@@ -100,26 +102,28 @@ function scheduleOne(id: symbol, reg: ClipReg): void {
   const c = getCtx();
   const { fps } = reg;
   const rate = reg.playbackRate || 1;
+  const compRate = anchor.rate || 1; // whole-timeline preview speed (e.g. a 2x eval player)
+  const timeScale = fps * compRate; // timeline frames advance this many per real second
   // No trimAfter → play from the in-point to the end of the source; the Sequence unmounting the
   // clip (which unregisters it) clamps it to the actual timeline window.
   const effDur = Number.isFinite(reg.durFrames) ? reg.durFrames : Math.max(0, (reg.buffer.duration * fps - reg.trimBefore) / rate);
-  const startCtx = anchor.ctxTime + (reg.fromFrame - anchor.frame) / fps;
-  const endCtx = startCtx + effDur / fps;
+  const startCtx = anchor.ctxTime + (reg.fromFrame - anchor.frame) / timeScale;
+  const endCtx = startCtx + effDur / timeScale;
   const now = c.currentTime;
   if (endCtx <= now + 0.02) return; // already finished
 
   // If the clip already began (we're mid-slice, e.g. after a seek), jump in at the right offset.
   const when = startCtx >= now ? startCtx : now;
-  const framesElapsed = startCtx >= now ? 0 : (now - startCtx) * fps;
+  const framesElapsed = startCtx >= now ? 0 : (now - startCtx) * timeScale;
   const intoSec = (reg.trimBefore + framesElapsed * rate) / fps; // source seconds to start at
   const remainingTimelineFrames = effDur - framesElapsed;
   const srcDurSec = (remainingTimelineFrames * rate) / fps; // source seconds to consume
 
   const gain = c.createGain();
-  applyVolume(gain, reg.volume, fps, when, framesElapsed, effDur);
+  applyVolume(gain, reg.volume, timeScale, when, framesElapsed, effDur);
   const node = c.createBufferSource();
   node.buffer = reg.buffer;
-  node.playbackRate.value = rate;
+  node.playbackRate.value = rate * compRate; // source rate × whole-timeline rate
   node.connect(gain);
   gain.connect(c.destination);
   try {

@@ -144,13 +144,13 @@ export const Player = forwardRef<PlayerRef, PlayerProps>(function Player(props, 
       // resumeCtx runs inside the play call (a user gesture) so autoplay policy is satisfied.
       if (value) {
         resumeCtx();
-        beginPlayback(frameRef.current, fps);
+        beginPlayback(frameRef.current, playbackRate);
       } else {
         stopPlayback();
       }
       emit(value ? 'play' : 'pause', undefined);
     },
-    [emit, fps],
+    [emit, playbackRate],
   );
 
   // The rAF clock: advance the frame at fps·playbackRate while playing; loop or fire `ended`.
@@ -172,7 +172,7 @@ export const Player = forwardRef<PlayerRef, PlayerProps>(function Player(props, 
         if (loop) {
           anchor = { t: performance.now(), f: 0 };
           commitFrame(0);
-          beginPlayback(0, fps); // re-anchor audio + reschedule clips from frame 0
+          beginPlayback(0, playbackRate); // re-anchor audio + reschedule clips from frame 0
         } else {
           commitFrame(durationInFrames - 1);
           setPlaying(false);
