@@ -1,7 +1,8 @@
 // The primitive vocabulary — real DOM, Remotion-compatible. These are thin wrappers
 // over <div>/<img>/<video>/<audio>, so arbitrary CSS in a composition just works.
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { useCurrentFrame, useIsPlaying, useTimelinePosition, useVideoConfig } from './frame';
+import { memo, useCallback, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
+import { SequenceFromContext, useCurrentFrame, useIsPlaying, useTimelinePosition, useVideoConfig } from './frame';
+import { decode, register, unregister } from './audio-engine';
 import { registerRenderAsset } from './assets';
 import { continueRender, delayRender } from './delay-render';
 
@@ -25,6 +26,34 @@ interface MediaProps {
 
 const resolveVolume = (volume: number | ((f: number) => number) | undefined, frame: number): number =>
   typeof volume === 'function' ? volume(frame) : (volume ?? 1);
+
+interface MediaVolumeProps {
+  mediaRef: RefObject<HTMLMediaElement | null>;
+  volume: number | ((frame: number) => number) | undefined;
+}
+
+const ConstantMediaVolume = memo(function ConstantMediaVolume({ mediaRef, volume }: MediaVolumeProps): null {
+  useEffect(() => {
+    if (mediaRef.current) mediaRef.current.volume = (volume as number | undefined) ?? 1;
+  }, [mediaRef, volume]);
+  return null;
+});
+
+const FrameMediaVolume = memo(function FrameMediaVolume({ mediaRef, volume }: MediaVolumeProps): null {
+  const frame = useCurrentFrame();
+  useEffect(() => {
+    if (mediaRef.current) mediaRef.current.volume = (volume as (frame: number) => number)(frame);
+  }, [frame, mediaRef, volume]);
+  return null;
+});
+
+function MediaVolume({ mediaRef, volume }: MediaVolumeProps): JSX.Element {
+  return typeof volume === 'function' ? (
+    <FrameMediaVolume mediaRef={mediaRef} volume={volume} />
+  ) : (
+    <ConstantMediaVolume mediaRef={mediaRef} volume={volume} />
+  );
+}
 
 /** The source frame the media should show at composition frame `frame`. */
 const sourceFrameAt = (frame: number, offset: number, playbackRate: number, trimAfter: number | undefined): number => {
@@ -165,26 +194,29 @@ export function Video({
   }, [frame, playing, fps, offset, playbackRate, trimAfter]);
 
   return (
-    <video
-      ref={ref}
-      src={src}
-      muted={muted}
-      playsInline
-      crossOrigin={crossOrigin}
-      className={className}
-      // Force the playing <video> OFF Chrome's hardware video-overlay plane with an imperceptible
-      // rotation. A hardware overlay must be an axis-aligned rectangle, so ANY rotation (0.04deg
-      // here) demotes the video to a regular composited texture — which then flattens into the
-      // Player container's filtered raster and gets bilinearly sub-pixel down-scaled, instead of
-      // the overlay being presented snapped to whole device pixels (the per-frame shake). The
-      // rotation is sub-0.1px / clipped, and the export ignores it (composites videos by bounding
-      // box, and runs paused). Only applied while playing. (A composition's own style wins below.)
-      style={playing ? { ...style, transform: `${style?.transform ? `${style.transform} ` : ''}rotate(0.04deg)` } : style}
-      onCanPlay={onCanPlay}
-      onError={onError}
-      onSeeking={onSeeking}
-      onSeeked={onSeeked}
-    />
+    <>
+      <video
+        ref={ref}
+        src={src}
+        muted={muted}
+        playsInline
+        crossOrigin={crossOrigin}
+        className={className}
+        // Force the playing <video> OFF Chrome's hardware video-overlay plane with an imperceptible
+        // rotation. A hardware overlay must be an axis-aligned rectangle, so ANY rotation (0.04deg
+        // here) demotes the video to a regular composited texture — which then flattens into the
+        // Player container's filtered raster and gets bilinearly sub-pixel down-scaled, instead of
+        // the overlay being presented snapped to whole device pixels (the per-frame shake). The
+        // rotation is sub-0.1px / clipped, and the export ignores it (composites videos by bounding
+        // box, and runs paused). Only applied while playing. (A composition's own style wins below.)
+        style={playing ? { ...style, transform: `${style?.transform ? `${style.transform} ` : ''}rotate(0.04deg)` } : style}
+        onCanPlay={onCanPlay}
+        onError={onError}
+        onSeeking={onSeeking}
+        onSeeked={onSeeked}
+      />
+      <MediaVolume mediaRef={ref} volume={volume} />
+    </>
   );
 }
 
@@ -198,6 +230,11 @@ export interface AudioProps extends MediaProps {
   useWebAudioApi?: boolean;
 }
 
+// Preview playback goes through the Web Audio scheduler (audio-engine): decode each source
+// once, place each clip's slice at a precise AudioContext time. That is sample-accurate and
+// warms during premount, so a dense edit has no startup silence and no per-cut gap — the html5
+// <audio>-per-clip path had both (inherent .play() latency under a free-running frame clock).
+// Renders are unaffected: they mux from useRenderAsset below, not from playback.
 export function Audio({
   src,
   trimBefore,
@@ -205,30 +242,48 @@ export function Audio({
   trimAfter,
   playbackRate = 1,
   volume,
-  crossOrigin,
+  crossOrigin: _crossOrigin,
   pauseWhenBuffering: _pauseWhenBuffering,
   useWebAudioApi: _useWebAudioApi,
-}: AudioProps): JSX.Element {
+}: AudioProps): JSX.Element | null {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const playing = useIsPlaying();
-  const ref = useRef<HTMLAudioElement>(null);
+  const from = useContext(SequenceFromContext); // absolute timeline start frame (stable during premount)
   const offset = trimBefore ?? startFrom ?? 0;
   useRenderAsset('audio', src, { offset, playbackRate, volume: resolveVolume(volume, frame) });
 
-  useEffect(() => {
-    const a = ref.current;
-    if (!a) return;
-    const target = sourceFrameAt(frame, offset, playbackRate, trimAfter) / fps;
-    if (playing) {
-      a.playbackRate = playbackRate;
-      if (a.paused) void a.play().catch(() => undefined);
-      if (Math.abs(a.currentTime - target) > 0.3) a.currentTime = target;
-    } else {
-      if (!a.paused) a.pause();
-      a.currentTime = target;
-    }
-  }, [frame, playing, fps, offset, playbackRate, trimAfter]);
+  const rendering = typeof window !== 'undefined' && (window as unknown as { __rerenderEnv?: string }).__rerenderEnv === 'rendering';
+  const durFrames = trimAfter !== undefined ? Math.max(0, trimAfter - offset) : Number.POSITIVE_INFINITY;
 
-  return <audio ref={ref} src={src} crossOrigin={crossOrigin} />;
+  // volume may be a fresh inline fade function each render; keep it in a ref so its identity
+  // doesn't re-trigger the schedule effect (which would restart the source every frame).
+  const volumeRef = useRef(volume);
+  volumeRef.current = volume;
+
+  const idRef = useRef<symbol>();
+  if (!idRef.current) idRef.current = Symbol('rerender-audio-clip');
+
+  // Warm: decode the source the moment this clip mounts (including its premount window).
+  useEffect(() => {
+    if (!rendering) void decode(src).catch(() => undefined);
+  }, [src, rendering]);
+
+  // Register with the scheduler while playback is active; it schedules (and reschedules on
+  // play/loop/seek). Unregister on unmount.
+  useEffect(() => {
+    if (rendering || !playing) return undefined;
+    const id = idRef.current as symbol;
+    let cancelled = false;
+    void decode(src).then((buffer) => {
+      if (cancelled) return;
+      register(id, { buffer, fromFrame: from, trimBefore: offset, durFrames, playbackRate, volume: volumeRef.current ?? 1, fps });
+    });
+    return () => {
+      cancelled = true;
+      unregister(id);
+    };
+  }, [playing, src, from, offset, durFrames, playbackRate, fps, rendering]);
+
+  return null;
 }

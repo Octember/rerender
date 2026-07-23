@@ -24,6 +24,9 @@ export const PlayingContext = createContext<boolean>(false);
 /** The absolute composition frame — NOT shifted by <Sequence> (unlike FrameContext).
  *  Audio/Video assets use it to place themselves on the render timeline. */
 export const TimelineContext = createContext<number>(0);
+/** Absolute timeline start frame of the enclosing <Sequence> chain. Media uses it to schedule
+ *  itself on the player timeline even while premounting, when the shifted frame is clamped to 0. */
+export const SequenceFromContext = createContext<number>(0);
 
 export const useCurrentFrame = (): number => useContext(FrameContext);
 export const useVideoConfig = (): VideoConfig => useContext(ConfigContext);
@@ -80,19 +83,27 @@ export function Sequence({
   children: ReactNode;
 }): ReactNode {
   const parent = useCurrentFrame();
+  const parentFrom = useContext(SequenceFromContext);
+  const absFrom = parentFrom + from;
   const local = parent - from;
   if (local >= durationInFrames || local < -premountFor) return null;
   // Premount window [from - premountFor, from): render the children (so <Video>/<Img> begin
   // loading) at their first frame, but invisible, until the sequence actually starts.
   if (local < 0) {
     return (
-      <FrameContext.Provider value={0}>
-        <div style={{ opacity: 0, pointerEvents: 'none' }}>{children}</div>
-      </FrameContext.Provider>
+      <SequenceFromContext.Provider value={absFrom}>
+        <FrameContext.Provider value={0}>
+          <div style={{ opacity: 0, pointerEvents: 'none' }}>{children}</div>
+        </FrameContext.Provider>
+      </SequenceFromContext.Provider>
     );
   }
   const content = layout === 'absolute-fill' ? <AbsoluteFill style={style}>{children}</AbsoluteFill> : children;
-  return <FrameContext.Provider value={local}>{content}</FrameContext.Provider>;
+  return (
+    <SequenceFromContext.Provider value={absFrom}>
+      <FrameContext.Provider value={local}>{content}</FrameContext.Provider>
+    </SequenceFromContext.Provider>
+  );
 }
 
 interface SeriesSequenceProps {
