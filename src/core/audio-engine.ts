@@ -30,7 +30,14 @@ export function decode(url: string): Promise<AudioBuffer> {
   if (!p) {
     p = fetch(url)
       .then((r) => r.arrayBuffer())
-      .then((b) => getCtx().decodeAudioData(b));
+      .then((b) => getCtx().decodeAudioData(b))
+      .catch((err) => {
+        // Never cache a rejection. A transient fetch/codec failure would otherwise poison this
+        // source for the rest of the session — every later decode() would hand back the same
+        // rejected promise and the clip could never recover. Evicting lets a remount retry.
+        decodeCache.delete(url);
+        throw err;
+      });
     decodeCache.set(url, p);
   }
   return p;
